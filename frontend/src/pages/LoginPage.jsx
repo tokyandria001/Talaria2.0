@@ -15,7 +15,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(form.email, form.password);
-      navigate('/dashboard');
+      navigate('/map');
     } catch (err) {
       setError(err.response?.data?.message || 'Email ou mot de passe incorrect.');
     } finally {
@@ -27,7 +27,7 @@ export default function LoginPage() {
     <div style={pageStyle}>
       <div style={containerStyle}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontWeight: 800, fontSize: 32, color: 'var(--parme)', marginBottom: 8 }}>Talaria</div>
+          <img src="/logo-dark.svg" alt="Talaria" style={{ height: 36, marginBottom: 8 }} />
           <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text)' }}>Bon retour 👋</h1>
           <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>Connecte-toi à ton compte</p>
         </div>

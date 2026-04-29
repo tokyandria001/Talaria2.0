@@ -25,7 +25,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register({ email: form.email, password: form.password, firstName: form.firstName, lastName: form.lastName });
-      navigate('/dashboard');
+      navigate('/map');
     } catch (err) {
       const data = err.response?.data;
       if (data?.errors) setErrors(data.errors);
@@ -45,7 +45,7 @@ export default function RegisterPage() {
     <div style={pageStyle}>
       <div style={containerStyle}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ fontWeight: 800, fontSize: 32, color: 'var(--parme)', marginBottom: 8 }}>Talaria</div>
+          <img src="/logo-dark.svg" alt="Talaria" style={{ height: 36, marginBottom: 8 }} />
           <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text)' }}>Crée ton compte ✈️</h1>
           <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>Voyager mieux, pour moins cher, ensemble.</p>
         </div>

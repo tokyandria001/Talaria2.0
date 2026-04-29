@@ -1,0 +1,13 @@
+# Backend
+backend/var/
+backend/vendor/
+backend/config/jwt/private.pem
+backend/config/jwt/public.pem
+backend/.env.local
+backend/.env.*.local
+backend/public/uploads/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local

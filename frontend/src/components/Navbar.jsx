@@ -24,7 +24,7 @@ export default function Navbar() {
       zIndex: 100,
     }}>
       <Link to="/dashboard" style={{ textDecoration: 'none' }}>
-        <span style={{ fontWeight: 800, fontSize: 22, color: 'var(--parme)' }}>Talaria</span>
+        <img src="/logo-dark.svg" alt="Talaria" style={{ height: 24 }} />
       </Link>
 
       {user && (
