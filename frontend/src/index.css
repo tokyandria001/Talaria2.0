@@ -1,0 +1,134 @@
+/* Talaria brand colors */
+:root {
+  --parme: #4f203f;
+  --sable-lune: #fcf9f1;
+  --sable-dore: #f0dacb;
+  --orchidee: #c9b2d7;
+  --parme-light: rgba(79, 32, 63, 0.08);
+  --text: #3a2535;
+  --text-muted: #7a6572;
+  --border: #e8dfe5;
+  --error: #c0392b;
+  --success: #27ae60;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
+  background: var(--sable-lune);
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { min-height: 100svh; }
+
+/* Utility classes */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 100px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--parme);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) { background: #3a1830; }
+
+.btn-outline {
+  background: transparent;
+  color: var(--parme);
+  border: 2px solid var(--parme);
+}
+.btn-outline:hover:not(:disabled) { background: var(--parme-light); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+.btn-ghost:hover:not(:disabled) { color: var(--parme); background: var(--parme-light); }
+
+.input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  font-size: 15px;
+  background: #fff;
+  color: var(--text);
+  transition: border-color 0.2s;
+  outline: none;
+}
+.input:focus { border-color: var(--parme); }
+.input.error { border-color: var(--error); }
+
+.label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.card {
+  background: #fff;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  padding: 28px;
+}
+
+.error-msg {
+  font-size: 13px;
+  color: var(--error);
+  margin-top: 4px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+  background: #fff;
+  color: var(--text-muted);
+}
+.tag:hover { border-color: var(--parme); color: var(--parme); }
+.tag.active {
+  background: var(--parme);
+  color: #fff;
+  border-color: var(--parme);
+}
+
+.spinner {
+  display: inline-block;
+  width: 20px; height: 20px;
+  border: 2.5px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.spinner.dark {
+  border-color: rgba(79,32,63,0.2);
+  border-top-color: var(--parme);
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
