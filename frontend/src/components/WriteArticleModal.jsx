@@ -43,7 +43,9 @@ export default function WriteArticleModal({ onClose, onSaved, article }) {
       const { data } = await api.post('/api/articles/upload-cover', fd);
       setCoverPath(data.path);
     } catch (err) {
-      setUploadError(err.response?.data?.message || 'Erreur lors de l\'upload.');
+      const status = err.response?.status;
+      const msg = err.response?.data?.message || err.response?.data?.detail || err.message;
+      setUploadError(msg ? `Erreur ${status ?? ''} : ${msg}` : `Erreur réseau (backend démarré ?)`);
       setPreviewUrl(null);
     } finally {
       setUploading(false);

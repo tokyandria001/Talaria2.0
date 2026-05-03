@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-
-const maplibregl = window.maplibregl;
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/axios';
 import AddPlaceModal from '../components/AddPlaceModal';

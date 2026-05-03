@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/axios';
 import Navbar from '../components/Navbar';
@@ -36,7 +37,8 @@ const TRANSPORTS = [
 ];
 
 export default function ProfilePage() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -55,6 +57,10 @@ export default function ProfilePage() {
   const [pwdMsg, setPwdMsg] = useState(null);
   const [uploadingPic, setUploadingPic] = useState(false);
   const [interestInput, setInterestInput] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState('');
   const fileRef = useRef();
 
   const toggleTag = (val) => {
@@ -118,6 +124,21 @@ export default function ProfilePage() {
       setPwdMsg({ type: 'error', text: err.response?.data?.message || 'Erreur.' });
     } finally {
       setSavingPwd(false);
+    }
+  };
+
+  const handleDeleteAccount = async (e) => {
+    e.preventDefault();
+    setDeleting(true);
+    setDeleteErr('');
+    try {
+      await api.delete('/api/profile', { data: { password: deletePassword } });
+      logout();
+      navigate('/');
+    } catch (err) {
+      setDeleteErr(err.response?.data?.message || 'Erreur lors de la suppression.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -354,7 +375,77 @@ export default function ProfilePage() {
           </button>
         </form>
 
+        {/* Zone dangereuse */}
+        <div className="card" style={{ borderColor: '#fca5a5', background: '#fff5f5' }}>
+          <h2 style={{ fontWeight: 700, fontSize: 18, color: '#dc2626', marginBottom: 8 }}>Zone dangereuse</h2>
+          <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>
+            La suppression de votre compte est définitive. Tous vos articles, commentaires et likes seront effacés.
+          </p>
+          <button
+            className="btn"
+            style={{ background: '#dc2626', color: '#fff', padding: '9px 20px', fontSize: 13, fontWeight: 700, borderRadius: 10 }}
+            onClick={() => { setShowDeleteModal(true); setDeleteErr(''); setDeletePassword(''); }}
+          >
+            Supprimer mon compte
+          </button>
+        </div>
+
       </main>
+
+      {/* Modal confirmation suppression */}
+      {showDeleteModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={() => setShowDeleteModal(false)}
+        >
+          <div
+            style={{ background: '#fff', borderRadius: 20, padding: 32, maxWidth: 440, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 style={{ fontWeight: 800, fontSize: 20, color: '#dc2626', marginBottom: 8 }}>Supprimer mon compte</h2>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>
+              Cette action est <strong>irréversible</strong>. Tous vos articles, commentaires et likes seront définitivement supprimés. Confirmez avec votre mot de passe.
+            </p>
+
+            <form onSubmit={handleDeleteAccount} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="label">Mot de passe actuel</label>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="••••••••"
+                  value={deletePassword}
+                  onChange={e => setDeletePassword(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+
+              {deleteErr && <p style={{ fontSize: 13, color: '#dc2626', fontWeight: 600 }}>{deleteErr}</p>}
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="btn"
+                  style={{ background: '#dc2626', color: '#fff', padding: '9px 20px', fontSize: 13, fontWeight: 700, borderRadius: 10 }}
+                  disabled={deleting || !deletePassword}
+                >
+                  {deleting ? <><span className="spinner" /> Suppression...</> : 'Confirmer la suppression'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

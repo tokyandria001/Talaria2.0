@@ -2,6 +2,9 @@
 
 namespace App\Controller;
 
+use App\Entity\Article;
+use App\Entity\ArticleLike;
+use App\Entity\Comment;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -99,6 +102,66 @@ class ProfileController extends AbstractController
         $em->flush();
 
         return $this->json(['profilePicture' => $publicPath]);
+    }
+
+    #[Route('', name: 'delete', methods: ['DELETE'])]
+    public function deleteAccount(
+        Request $request,
+        EntityManagerInterface $em,
+        UserPasswordHasherInterface $hasher,
+    ): JsonResponse {
+        /** @var User $me */
+        $me   = $this->getUser();
+        $data = json_decode($request->getContent(), true) ?? [];
+
+        if (empty($data['password'])) {
+            return $this->json(['message' => 'Mot de passe requis pour confirmer la suppression.'], 400);
+        }
+        if (!$hasher->isPasswordValid($me, $data['password'])) {
+            return $this->json(['message' => 'Mot de passe incorrect.'], 401);
+        }
+
+        // 1. Likes du user sur les articles des autres
+        foreach ($em->getRepository(ArticleLike::class)->findBy(['user' => $me]) as $like) {
+            $em->remove($like);
+        }
+
+        // 2. Commentaires du user sur les articles des autres
+        foreach ($em->getRepository(Comment::class)->findBy(['author' => $me]) as $comment) {
+            $em->remove($comment);
+        }
+
+        $em->flush();
+
+        // 3. Pour chaque article du user : supprimer likes + comments + article
+        foreach ($em->getRepository(Article::class)->findBy(['author' => $me]) as $article) {
+            foreach ($em->getRepository(ArticleLike::class)->findBy(['article' => $article]) as $like) {
+                $em->remove($like);
+            }
+            foreach ($em->getRepository(Comment::class)->findBy(['article' => $article]) as $comment) {
+                $em->remove($comment);
+            }
+            // Supprimer le fichier cover si présent
+            if ($article->getCoverImage()) {
+                $path = $this->getParameter('kernel.project_dir') . '/public' . $article->getCoverImage();
+                if (file_exists($path)) unlink($path);
+            }
+            $em->remove($article);
+        }
+
+        $em->flush();
+
+        // 4. Supprimer la photo de profil
+        if ($me->getProfilePicture()) {
+            $path = $this->getParameter('kernel.project_dir') . '/public' . $me->getProfilePicture();
+            if (file_exists($path)) unlink($path);
+        }
+
+        // 5. Supprimer le compte
+        $em->remove($me);
+        $em->flush();
+
+        return $this->json(null, 204);
     }
 
     #[Route('/password', name: 'password', methods: ['PUT'])]

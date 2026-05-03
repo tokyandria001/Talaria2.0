@@ -237,28 +237,40 @@ class ArticleController extends AbstractController
     #[Route('/upload-cover', methods: ['POST'])]
     public function uploadCover(Request $request): JsonResponse
     {
-        $file = $request->files->get('cover');
-        if (!$file) {
-            return $this->json(['message' => 'Aucun fichier envoyé.'], 400);
-        }
+        try {
+            $file = $request->files->get('cover');
+            if (!$file) {
+                return $this->json(['message' => 'Aucun fichier envoyé.'], 400);
+            }
 
-        $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-        if (!in_array($file->getMimeType(), $allowed)) {
-            return $this->json(['message' => 'Format invalide. JPEG, PNG, WebP ou GIF uniquement.'], 400);
-        }
-        if ($file->getSize() > 5 * 1024 * 1024) {
-            return $this->json(['message' => 'Image trop lourde (max 5 Mo).'], 400);
-        }
+            if (!$file->isValid()) {
+                return $this->json(['message' => 'Fichier corrompu (code PHP ' . $file->getError() . ').'], 400);
+            }
 
-        $uploadDir = $this->projectDir . '/public/uploads/articles';
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
+            $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+            $mime    = $file->getMimeType();
+            if (!in_array($mime, $allowed)) {
+                return $this->json(['message' => 'Format invalide (' . $mime . '). JPEG, PNG, WebP ou GIF uniquement.'], 400);
+            }
+
+            if ($file->getSize() > 5 * 1024 * 1024) {
+                return $this->json(['message' => 'Image trop lourde (max 5 Mo).'], 400);
+            }
+
+            $uploadDir = $this->projectDir . '/public/uploads/articles';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+
+            $ext      = $file->guessExtension() ?? 'jpg';
+            $filename = uniqid('cover_', true) . '.' . $ext;
+            $file->move($uploadDir, $filename);
+
+            return $this->json(['path' => '/uploads/articles/' . $filename]);
+
+        } catch (\Exception $e) {
+            return $this->json(['message' => $e->getMessage()], 500);
         }
-
-        $filename = uniqid('cover_', true) . '.' . $file->guessExtension();
-        $file->move($uploadDir, $filename);
-
-        return $this->json(['path' => '/uploads/articles/' . $filename]);
     }
 
     /* ── Helpers ──────────────────────────────── */

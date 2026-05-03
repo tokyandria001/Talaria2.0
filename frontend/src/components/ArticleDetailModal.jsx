@@ -88,14 +88,15 @@ export default function ArticleDetailModal({ articleId, currentUser, onClose, on
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="article-modal" onClick={e => e.stopPropagation()}>
-        <button className="article-modal-close" onClick={onClose}>✕</button>
-
         {loading ? (
           <div className="article-modal-loader">
+            <button className="article-modal-close" onClick={onClose}>✕</button>
             <span className="spinner dark" />
           </div>
         ) : article ? (
           <div className="article-modal-inner">
+            <button className="article-modal-close" onClick={onClose}>✕</button>
+
             {/* Cover image */}
             {article.coverImage && (
               <div className="article-cover-wrap">
@@ -225,6 +226,7 @@ export default function ArticleDetailModal({ articleId, currentUser, onClose, on
           </div>
         ) : (
           <div className="article-modal-loader">
+            <button className="article-modal-close" onClick={onClose}>✕</button>
             <p style={{ color: 'var(--text-muted)' }}>Article introuvable.</p>
           </div>
         )}
