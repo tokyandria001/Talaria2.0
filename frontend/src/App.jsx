@@ -7,8 +7,9 @@ const LandingPage  = lazy(() => import('./pages/LandingPage'));
 const LoginPage    = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const ProfilePage  = lazy(() => import('./pages/ProfilePage'));
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const MapPage      = lazy(() => import('./pages/MapPage'));
+const DashboardPage   = lazy(() => import('./pages/DashboardPage'));
+const MapPage         = lazy(() => import('./pages/MapPage'));
+const CommunityPage   = lazy(() => import('./pages/CommunityPage'));
 
 const Loader = () => (
   <div style={{ height: '100svh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fcf9f1' }}>
@@ -27,7 +28,8 @@ export default function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/profile"  element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-            <Route path="/map"      element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
+            <Route path="/map"       element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
+            <Route path="/community" element={<ProtectedRoute><CommunityPage /></ProtectedRoute>} />
             <Route path="*"         element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

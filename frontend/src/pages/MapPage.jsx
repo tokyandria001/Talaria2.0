@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import { Link, useNavigate } from 'react-router-dom';
+
+const maplibregl = window.maplibregl;
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/axios';
 import AddPlaceModal from '../components/AddPlaceModal';
 import './MapPage.css';
 
-const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
+const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY;
+
+const MAP_STYLE = MAPTILER_KEY
+  ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`
+  : 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
+
+const TERRAIN_SOURCE = MAPTILER_KEY
+  ? `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${MAPTILER_KEY}`
+  : null;
 
 const CATEGORY_FILTERS = [
   { value: 'restaurant', label: 'Restaurants', icon: '🍽' },
@@ -68,33 +76,65 @@ export default function MapPage() {
     });
 
     map.on('load', () => {
-      /* 3D buildings — source layer from CartoDB/OpenMapTiles */
-      map.addLayer({
-        id: 'talaria-3d-buildings',
-        source: 'carto',
-        'source-layer': 'building',
-        type: 'fill-extrusion',
-        minzoom: 14,
-        layout: { visibility: 'none' },
-        paint: {
-          'fill-extrusion-color': [
-            'interpolate', ['linear'],
-            ['coalesce', ['get', 'height'], 10],
-            0,  '#f0dacb',
-            20, '#c9b2d7',
-            60, '#4f203f',
-          ],
-          'fill-extrusion-height': [
-            'interpolate', ['linear'], ['zoom'],
-            14, 0,
-            14.5, ['coalesce', ['get', 'render_height'], ['get', 'height'], 10],
-          ],
-          'fill-extrusion-base': [
-            'coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0,
-          ],
-          'fill-extrusion-opacity': 0.8,
-        },
-      });
+      /* ── Terrain 3D (MapTiler DEM) ── */
+      if (TERRAIN_SOURCE) {
+        map.addSource('maptiler-terrain', {
+          type: 'raster-dem',
+          url: TERRAIN_SOURCE,
+          tileSize: 256,
+        });
+
+        /* Atmosphère / ciel */
+        map.addLayer({
+          id: 'sky',
+          type: 'sky',
+          paint: {
+            'sky-type': 'atmosphere',
+            'sky-atmosphere-sun': [0, 90],
+            'sky-atmosphere-sun-intensity': 15,
+            'sky-atmosphere-color': 'rgba(135, 206, 235, 1)',
+            'sky-atmosphere-halo-color': 'rgba(255, 165, 0, 0.3)',
+            'sky-atmosphere-horizon-blend': 0.04,
+          },
+        });
+      }
+
+      /* ── 3D Buildings ── */
+      const buildingSource = MAPTILER_KEY ? 'maptiler_planet' : 'carto';
+
+      /* Vérifier que la source existe avant d'ajouter la couche */
+      const sources = map.getStyle().sources;
+      const hasSource = Object.keys(sources).includes(buildingSource);
+
+      if (hasSource) {
+        map.addLayer({
+          id: 'talaria-3d-buildings',
+          source: buildingSource,
+          'source-layer': 'building',
+          type: 'fill-extrusion',
+          minzoom: 14,
+          layout: { visibility: 'none' },
+          paint: {
+            'fill-extrusion-color': [
+              'interpolate', ['linear'],
+              ['coalesce', ['get', 'render_height'], ['get', 'height'], 0],
+              0,   '#f0dacb',
+              15,  '#c9b2d7',
+              40,  '#8c5a7e',
+              100, '#4f203f',
+            ],
+            'fill-extrusion-height': [
+              'interpolate', ['linear'], ['zoom'],
+              14, 0,
+              14.5, ['coalesce', ['get', 'render_height'], ['get', 'height'], 8],
+            ],
+            'fill-extrusion-base': [
+              'coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0,
+            ],
+            'fill-extrusion-opacity': 0.85,
+          },
+        });
+      }
 
       setMapLoaded(true);
     });
@@ -118,8 +158,18 @@ export default function MapPage() {
     if (!map) return;
     const next = !is3D;
     setIs3D(next);
+
     map.easeTo({ pitch: next ? 60 : 0, bearing: next ? -15 : 0, duration: 900 });
-    map.setLayoutProperty('talaria-3d-buildings', 'visibility', next ? 'visible' : 'none');
+
+    /* Terrain extrusion MapTiler */
+    if (TERRAIN_SOURCE) {
+      map.setTerrain(next ? { source: 'maptiler-terrain', exaggeration: 1.5 } : null);
+    }
+
+    /* Bâtiments 3D */
+    if (map.getLayer('talaria-3d-buildings')) {
+      map.setLayoutProperty('talaria-3d-buildings', 'visibility', next ? 'visible' : 'none');
+    }
   }, [is3D]);
 
   /* ── Fetch places ── */
@@ -212,9 +262,9 @@ export default function MapPage() {
               <button className="map-icon-btn" title="Mes voyages">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M21 3L3 10.53v.98l6.84 2.65L12.48 21h.98z"/></svg>
               </button>
-              <button className="map-icon-btn" title="Groupe">
+              <Link to="/community" className="map-icon-btn" title="Communauté">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-              </button>
+              </Link>
             </div>
           </div>
 
@@ -406,9 +456,10 @@ export default function MapPage() {
           {/* 3D hint */}
           {is3D && (
             <div className="map-3d-hint">
-              <span>🌍 Vue 3D — clic droit pour ajouter un lieu · maintenez Ctrl + glissez pour tourner</span>
+              <span>🌍 Vue 3D{MAPTILER_KEY ? ' · terrain activé' : ''} — clic droit pour ajouter un lieu · Ctrl + glisser pour tourner</span>
             </div>
           )}
+
         </div>
       </div>
 

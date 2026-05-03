@@ -1,0 +1,159 @@
+.write-modal {
+  background: #fff;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 720px;
+  padding: 28px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  max-height: 92svh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.write-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 4px;
+}
+
+.write-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Cover upload ─────────────────────────── */
+.write-upload-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 28px 20px;
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  background: var(--sable-lune);
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: border-color 0.15s, color 0.15s;
+  font-family: inherit;
+}
+.write-upload-btn:hover {
+  border-color: var(--parme);
+  color: var(--parme);
+}
+
+.write-upload-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.write-cover-preview {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  max-height: 220px;
+}
+
+.write-cover-img {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  display: block;
+}
+
+.write-cover-uploading {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.write-cover-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.write-cover-change,
+.write-cover-remove {
+  padding: 5px 12px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  border: none;
+  transition: all 0.15s;
+}
+
+.write-cover-change {
+  background: rgba(255,255,255,0.9);
+  color: var(--text);
+}
+.write-cover-change:hover { background: #fff; }
+
+.write-cover-remove {
+  background: rgba(192,57,43,0.85);
+  color: #fff;
+}
+.write-cover-remove:hover { background: var(--error); }
+
+/* ── Form fields ──────────────────────────── */
+.write-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%237a6572' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+
+.write-optional {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 8px;
+}
+
+.write-char-count {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.label { display: flex; align-items: center; }
+
+.write-textarea {
+  resize: vertical;
+  min-height: 200px;
+  line-height: 1.65;
+  font-size: 14px;
+}
+
+.write-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 4px;
+  flex-shrink: 0;
+}
