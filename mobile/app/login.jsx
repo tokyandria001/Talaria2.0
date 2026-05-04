@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, KeyboardAvoidingView, Platform, StatusBar,
+  ScrollView, KeyboardAvoidingView, Platform, StatusBar, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../constants/Colors';
 import TalariaLogo from '../components/TalariaLogo';
-import { AntDesign } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { useScaleFade, useSlideUp } from '../_hooks/useEntryAnim';
 
 const SocialBtn = ({ provider, label }) => (
   <TouchableOpacity style={styles.socialBtn} activeOpacity={0.85}>
-    <AntDesign
-      name={provider === 'google' ? 'google' : 'apple1'}
+    <Ionicons
+      name={provider === 'google' ? 'logo-google' : 'logo-apple'}
       size={18}
       color={provider === 'google' ? '#4285F4' : '#000'}
     />
@@ -22,8 +23,8 @@ const SocialBtn = ({ provider, label }) => (
 );
 
 export default function LoginScreen() {
-  const router       = useRouter();
-  const { login }    = useAuth();
+  const router    = useRouter();
+  const { login } = useAuth();
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -31,13 +32,17 @@ export default function LoginScreen() {
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
 
+  // Animations
+  const { opacity: logoOpacity, scale: logoScale } = useScaleFade(0);
+  const { opacity: formOpacity, translateY: formY } = useSlideUp(200, 40);
+
   const handleLogin = async () => {
     if (!email.trim() || !password) { setError('Remplis tous les champs.'); return; }
     setError('');
     setLoading(true);
     try {
       await login(email.trim(), password);
-      router.replace('/(tabs)/community');
+      router.replace('/(tabs)/home');
     } catch (err) {
       setError(err.response?.data?.message || 'Impossible de joindre le serveur.');
     } finally {
@@ -54,85 +59,93 @@ export default function LoginScreen() {
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
-          {/* Back */}
           <TouchableOpacity style={styles.back} onPress={() => router.back()}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
 
-          {/* Logo */}
-          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+          {/* Logo animé */}
+          <Animated.View style={[
+            { alignItems: 'center', marginBottom: 24 },
+            { opacity: logoOpacity, transform: [{ scale: logoScale }] },
+          ]}>
             <TalariaLogo height={52} />
-          </View>
+          </Animated.View>
 
-          <Text style={styles.title}>Connexion</Text>
-          <Text style={styles.subtitle}>Ravi de vous revoir ! Prêt pour de nouveaux voyages malins ?</Text>
+          {/* Formulaire animé */}
+          <Animated.View style={{
+            opacity: formOpacity,
+            transform: [{ translateY: formY }],
+          }}>
+            <Text style={styles.title}>Connexion</Text>
+            <Text style={styles.subtitle}>Ravi de vous revoir ! Prêt pour de nouveaux voyages malins ?</Text>
 
-          {/* Social */}
-          <SocialBtn provider="google" label="S'inscrire avec Google" />
-          <View style={{ height: 8 }} />
-          <SocialBtn provider="apple" label="S'inscrire avec Apple" />
-
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Ou alors...</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Fields */}
-          <Text style={styles.label}>Mail</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Entrez votre mail"
-            placeholderTextColor={Colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          <Text style={styles.label}>Mot de passe</Text>
-          <View style={styles.pwdWrap}>
-            <TextInput
-              style={[styles.input, { flex: 1, marginBottom: 0 }]}
-              placeholder="Entrez votre mot de passe"
-              placeholderTextColor={Colors.textMuted}
-              secureTextEntry={!showPwd}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPwd(v => !v)}>
-              <Text style={styles.eyeIcon}>{showPwd ? '🙈' : '👁'}</Text>
+            <TouchableOpacity style={styles.socialBtn} activeOpacity={0.85}>
+              <Ionicons name="logo-google" size={18} color="#4285F4" />
+              <Text style={styles.socialLabel}>Se connecter avec Google</Text>
             </TouchableOpacity>
-          </View>
+            <View style={{ height: 8 }} />
+            <TouchableOpacity style={styles.socialBtn} activeOpacity={0.85}>
+              <Ionicons name="logo-apple" size={18} color="#000" />
+              <Text style={styles.socialLabel}>Se connecter avec Apple</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.forgotWrap}>
-            <Text style={styles.forgot}>Mot de passe oublié ?</Text>
-          </TouchableOpacity>
-
-          {/* Error */}
-          {!!error && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Ou alors...</Text>
+              <View style={styles.dividerLine} />
             </View>
-          )}
 
-          {/* Submit */}
-          <TouchableOpacity
-            style={[styles.btn, loading && { opacity: 0.6 }]}
-            onPress={handleLogin}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.btnText}>{loading ? 'Connexion...' : 'Se connecter'}</Text>
-          </TouchableOpacity>
+            <Text style={styles.label}>Mail</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Entrez votre mail"
+              placeholderTextColor={Colors.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
 
-          {/* Switch */}
-          <TouchableOpacity onPress={() => router.replace('/register')} style={styles.switchWrap}>
-            <Text style={styles.switchText}>
-              Vous n'avez pas de compte ? <Text style={styles.switchLink}>S'inscrire</Text>
-            </Text>
-          </TouchableOpacity>
+            <Text style={styles.label}>Mot de passe</Text>
+            <View style={styles.pwdWrap}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="Entrez votre mot de passe"
+                placeholderTextColor={Colors.textMuted}
+                secureTextEntry={!showPwd}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPwd(v => !v)}>
+                <Text style={styles.eyeIcon}>{showPwd ? '🙈' : '👁'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.forgotWrap}>
+              <Text style={styles.forgot}>Mot de passe oublié ?</Text>
+            </TouchableOpacity>
+
+            {!!error && (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.btn, loading && { opacity: 0.6 }]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnText}>{loading ? 'Connexion...' : 'Se connecter'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => router.replace('/register')} style={styles.switchWrap}>
+              <Text style={styles.switchText}>
+                Vous n'avez pas de compte ? <Text style={styles.switchLink}>S'inscrire</Text>
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -146,11 +159,6 @@ const styles = StyleSheet.create({
 
   back:      { marginTop: 8, marginBottom: 16, width: 36 },
   backArrow: { fontSize: 22, color: Colors.text },
-
-  logo: {
-    fontFamily: 'BricolageGrotesque_800ExtraBold',
-    fontSize: 26, color: Colors.parme, textAlign: 'center', marginBottom: 24,
-  },
 
   title: {
     fontFamily: 'BricolageGrotesque_800ExtraBold',
@@ -166,7 +174,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: Colors.border,
     borderRadius: 14, paddingVertical: 14, paddingHorizontal: 20,
   },
-  socialIcon:  { fontSize: 16, color: Colors.text, fontWeight: '700', width: 22, textAlign: 'center' },
   socialLabel: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.text },
 
   divider: {

@@ -1,33 +1,32 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import {
   View, Text, Image, StyleSheet, Dimensions,
-  FlatList, TouchableOpacity, StatusBar,
+  FlatList, TouchableOpacity, StatusBar, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
-import TalariaLogo from '../components/TalariaLogo';
+import { useSlideUp, useTextSwap } from '../_hooks/useEntryAnim';
 
 const { width, height } = Dimensions.get('window');
 
 const SLIDES = [
   {
     id: '1',
-    bg:       require('../assets/slide1.jpg'),
+    bg:       require('../assets/roma.jpg'),
     title:    'Meilleurs deals\nvoyages.',
     subtitle: 'Vols, hôtels, au bon prix.',
     overlay:  'rgba(30,5,20,0.42)',
   },
   {
     id: '2',
-    bg:       require('../assets/slide2.jpg'),
+    bg:       require('../assets/paris.jpg'),
     title:    'Vols, hôtels et\nactivités optimisés.',
     subtitle: 'Les meilleurs prix, au bon moment.',
     overlay:  'rgba(20,0,30,0.50)',
   },
   {
     id: '3',
-    bg:       require('../assets/slide3.jpg'),
+    bg:       require('../assets/n.jpg'),
     title:    'Voyagez mieux,\nensemble.',
     subtitle: 'Une communauté de voyageurs malins.',
     overlay:  'rgba(79,32,63,0.48)',
@@ -37,11 +36,28 @@ const SLIDES = [
 export default function OnboardingScreen() {
   const router  = useRouter();
   const listRef = useRef(null);
-  const [active, setActive] = useState(0);
+  const [active,   setActive]   = useState(0);
+  const [titleTxt, setTitleTxt] = useState(SLIDES[0].title);
+  const [subTxt,   setSubTxt]   = useState(SLIDES[0].subtitle);
+
+  // Mount animations
+  const { opacity: cardOpacity,
+          translateY: cardY }    = useSlideUp(400, 120);
+
+  // Text swap animation
+  const { opacity: textOpacity,
+          translateY: textY,
+          swap }                 = useTextSwap();
 
   const onScroll = (e) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-    setActive(idx);
+    if (idx !== active) {
+      swap(() => {
+        setActive(idx);
+        setTitleTxt(SLIDES[idx].title);
+        setSubTxt(SLIDES[idx].subtitle);
+      });
+    }
   };
 
   const next = () => {
@@ -71,16 +87,15 @@ export default function OnboardingScreen() {
             <Image source={item.bg} style={styles.bg} resizeMode="cover" />
             <View style={[styles.overlay, { backgroundColor: item.overlay }]} />
 
-            {/* Top bar */}
-            <SafeAreaView style={styles.topBar}>
-              <TalariaLogo height={36} light />
-            </SafeAreaView>
           </View>
         )}
       />
 
-      {/* Bottom card */}
-      <View style={styles.card}>
+      {/* Bottom card — slide-up à l'entrée */}
+      <Animated.View style={[
+        styles.card,
+        { opacity: cardOpacity, transform: [{ translateY: cardY }] },
+      ]}>
         {/* Dots */}
         <View style={styles.dots}>
           {SLIDES.map((_, i) => (
@@ -88,15 +103,26 @@ export default function OnboardingScreen() {
           ))}
         </View>
 
-        <Text style={styles.title}>{SLIDES[active].title}</Text>
-        <Text style={styles.subtitle}>{SLIDES[active].subtitle}</Text>
+        {/* Titre et sous-titre animés */}
+        <Animated.Text style={[
+          styles.title,
+          { opacity: textOpacity, transform: [{ translateY: textY }] },
+        ]}>
+          {titleTxt}
+        </Animated.Text>
+        <Animated.Text style={[
+          styles.subtitle,
+          { opacity: textOpacity, transform: [{ translateY: textY }] },
+        ]}>
+          {subTxt}
+        </Animated.Text>
 
         <TouchableOpacity style={styles.btn} onPress={next} activeOpacity={0.85}>
           <Text style={styles.btnText}>
             {active < SLIDES.length - 1 ? 'Suivant' : 'Commencer mon voyage'}
           </Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -104,18 +130,10 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#1a0a14' },
 
-  slide: { width, height, position: 'relative' },
-  bg:    { position: 'absolute', inset: 0, width, height },
+  slide:   { width, height, position: 'relative' },
+  bg:      { position: 'absolute', inset: 0, width, height },
   overlay: { position: 'absolute', inset: 0 },
 
-  topBar: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    alignItems: 'center', paddingTop: 16,
-  },
-  logo: {
-    fontFamily: 'BricolageGrotesque_800ExtraBold',
-    fontSize: 28, color: Colors.white, letterSpacing: 0.5,
-  },
 
   card: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -123,8 +141,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 32, borderTopRightRadius: 32,
     padding: 28, paddingBottom: 44,
   },
-  dots: { flexDirection: 'row', gap: 6, marginBottom: 20 },
-  dot:  { width: 7, height: 7, borderRadius: 4, backgroundColor: '#e0d0dc' },
+  dots:      { flexDirection: 'row', gap: 6, marginBottom: 20 },
+  dot:       { width: 7, height: 7, borderRadius: 4, backgroundColor: '#e0d0dc' },
   dotActive: { width: 22, backgroundColor: Colors.parme },
 
   title: {

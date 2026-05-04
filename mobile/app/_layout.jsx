@@ -32,7 +32,16 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index"      options={{ animation: 'none' }} />
+            <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+            <Stack.Screen name="welcome"    options={{ animation: 'fade' }} />
+            <Stack.Screen name="login"      options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="register"   options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="(tabs)"     options={{ animation: 'fade' }} />
+            <Stack.Screen name="cgu"        options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="privacy"    options={{ animation: 'slide_from_bottom' }} />
+          </Stack>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

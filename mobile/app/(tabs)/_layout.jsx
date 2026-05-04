@@ -1,12 +1,15 @@
+import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import ChatbotFAB from '../../components/ChatbotFAB';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
 
   return (
+    <View style={{ flex: 1 }}>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -32,6 +35,19 @@ export default function TabLayout() {
         },
       }}
     >
+      <Tabs.Screen
+        name="home"
+        options={{
+          tabBarLabel: 'Accueil',
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons
+              name={focused ? 'home' : 'home-outline'}
+              size={24}
+              color={color}
+            />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="map"
         options={{
@@ -59,6 +75,19 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="trips"
+        options={{
+          tabBarLabel: 'Voyages',
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons
+              name={focused ? 'airplane' : 'airplane-outline'}
+              size={24}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           tabBarLabel: 'Profil',
@@ -72,5 +101,7 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    <ChatbotFAB />
+    </View>
   );
 }

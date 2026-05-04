@@ -23,7 +23,7 @@ export default function Navbar() {
       top: 0,
       zIndex: 100,
     }}>
-      <Link to="/dashboard" style={{ textDecoration: 'none' }}>
+      <Link to="/map" style={{ textDecoration: 'none' }}>
         <img src="/logo-dark.svg" alt="Talaria" style={{ height: 24 }} />
       </Link>
 

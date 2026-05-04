@@ -270,15 +270,15 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: Colors.parme,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: Colors.parme, shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    borderWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   markerIcon: { fontSize: 18 },
 
-  callout:      { width: 180, padding: 4 },
-  calloutName:  { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: Colors.parme, marginBottom: 4 },
-  calloutDesc:  { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.textMuted },
-  calloutPrice: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.text, marginTop: 4 },
+  callout:      { width: 200, padding: 10, backgroundColor: Colors.white, borderRadius: 10 },
+  calloutName:  { fontSize: 14, fontWeight: '700', color: Colors.parme, marginBottom: 4 },
+  calloutDesc:  { fontSize: 12, color: Colors.textMuted },
+  calloutPrice: { fontSize: 12, fontWeight: '600', color: Colors.text, marginTop: 4 },
 
   controls: {
     position: 'absolute', right: 16, bottom: 130,

@@ -1,25 +1,15 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, KeyboardAvoidingView, Platform, StatusBar,
+  ScrollView, KeyboardAvoidingView, Platform, StatusBar, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../constants/Colors';
 import TalariaLogo from '../components/TalariaLogo';
-import { AntDesign } from '@expo/vector-icons';
-
-const SocialBtn = ({ provider, label }) => (
-  <TouchableOpacity style={styles.socialBtn} activeOpacity={0.85}>
-    <AntDesign
-      name={provider === 'google' ? 'google' : 'apple1'}
-      size={18}
-      color={provider === 'google' ? '#4285F4' : '#000'}
-    />
-    <Text style={styles.socialLabel}>{label}</Text>
-  </TouchableOpacity>
-);
+import { Ionicons } from '@expo/vector-icons';
+import { useScaleFade, useSlideUp } from '../_hooks/useEntryAnim';
 
 export default function RegisterScreen() {
   const router        = useRouter();
@@ -29,6 +19,10 @@ export default function RegisterScreen() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+
+  // Animations
+  const { opacity: logoOpacity, scale: logoScale } = useScaleFade(0);
+  const { opacity: formOpacity, translateY: formY } = useSlideUp(200, 40);
 
   const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -49,7 +43,7 @@ export default function RegisterScreen() {
         lastName:  form.lastName.trim() || undefined,
         username:  form.username.trim() || undefined,
       });
-      router.replace('/(tabs)/community');
+      router.replace('/(tabs)/home');
     } catch (err) {
       const msg = err.response?.data?.message || err.response?.data?.errors?.email;
       setError(msg || 'Impossible de joindre le serveur.');
@@ -68,123 +62,142 @@ export default function RegisterScreen() {
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
 
-          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+          {/* Logo animé */}
+          <Animated.View style={[
+            { alignItems: 'center', marginBottom: 24 },
+            { opacity: logoOpacity, transform: [{ scale: logoScale }] },
+          ]}>
             <TalariaLogo height={52} />
-          </View>
-          <Text style={styles.title}>Inscription</Text>
+          </Animated.View>
 
-          <SocialBtn provider="google" label="S'inscrire avec Google" />
-          <View style={{ height: 8 }} />
-          <SocialBtn provider="apple" label="S'inscrire avec Apple" />
+          {/* Formulaire animé */}
+          <Animated.View style={{
+            opacity: formOpacity,
+            transform: [{ translateY: formY }],
+          }}>
+            <Text style={styles.title}>Inscription</Text>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Ou alors...</Text>
-            <View style={styles.dividerLine} />
-          </View>
+            <TouchableOpacity style={styles.socialBtn} activeOpacity={0.85}>
+              <Ionicons name="logo-google" size={18} color="#4285F4" />
+              <Text style={styles.socialLabel}>S'inscrire avec Google</Text>
+            </TouchableOpacity>
+            <View style={{ height: 8 }} />
+            <TouchableOpacity style={styles.socialBtn} activeOpacity={0.85}>
+              <Ionicons name="logo-apple" size={18} color="#000" />
+              <Text style={styles.socialLabel}>S'inscrire avec Apple</Text>
+            </TouchableOpacity>
 
-          {/* Email */}
-          <Text style={styles.label}>Mail</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Entrez votre mail"
-            placeholderTextColor={Colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={form.email}
-            onChangeText={set('email')}
-          />
-
-          {/* First + Last name */}
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>Prénom</Text>
-              <TextInput
-                style={[styles.input, { marginBottom: 0 }]}
-                placeholder="Jean"
-                placeholderTextColor={Colors.textMuted}
-                value={form.firstName}
-                onChangeText={set('firstName')}
-              />
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Ou alors...</Text>
+              <View style={styles.dividerLine} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>Nom</Text>
-              <TextInput
-                style={[styles.input, { marginBottom: 0 }]}
-                placeholder="Dupont"
-                placeholderTextColor={Colors.textMuted}
-                value={form.lastName}
-                onChangeText={set('lastName')}
-              />
-            </View>
-          </View>
 
-          {/* Pseudo */}
-          <Text style={[styles.label, { marginTop: 12 }]}>
-            Pseudo <Text style={styles.optional}>(optionnel)</Text>
-          </Text>
-          <TextInput
-            style={styles.input}
-            placeholder="@explorateur"
-            placeholderTextColor={Colors.textMuted}
-            autoCapitalize="none"
-            value={form.username}
-            onChangeText={set('username')}
-          />
-
-          {/* Password */}
-          <Text style={styles.label}>Mot de passe</Text>
-          <View style={styles.pwdWrap}>
+            {/* Email */}
+            <Text style={styles.label}>Mail</Text>
             <TextInput
-              style={[styles.input, { flex: 1, marginBottom: 0 }]}
+              style={styles.input}
+              placeholder="Entrez votre mail"
+              placeholderTextColor={Colors.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={form.email}
+              onChangeText={set('email')}
+            />
+
+            {/* Prénom + Nom */}
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Prénom</Text>
+                <TextInput
+                  style={[styles.input, { marginBottom: 0 }]}
+                  placeholder="Jean"
+                  placeholderTextColor={Colors.textMuted}
+                  value={form.firstName}
+                  onChangeText={set('firstName')}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Nom</Text>
+                <TextInput
+                  style={[styles.input, { marginBottom: 0 }]}
+                  placeholder="Dupont"
+                  placeholderTextColor={Colors.textMuted}
+                  value={form.lastName}
+                  onChangeText={set('lastName')}
+                />
+              </View>
+            </View>
+
+            {/* Pseudo */}
+            <Text style={[styles.label, { marginTop: 12 }]}>
+              Pseudo <Text style={styles.optional}>(optionnel)</Text>
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="@explorateur"
+              placeholderTextColor={Colors.textMuted}
+              autoCapitalize="none"
+              value={form.username}
+              onChangeText={set('username')}
+            />
+
+            {/* Mot de passe */}
+            <Text style={styles.label}>Mot de passe</Text>
+            <View style={styles.pwdWrap}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="Entrez votre mot de passe"
+                placeholderTextColor={Colors.textMuted}
+                secureTextEntry={!showPwd}
+                value={form.password}
+                onChangeText={set('password')}
+              />
+              <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPwd(v => !v)}>
+                <Text style={styles.eyeIcon}>{showPwd ? '🙈' : '👁'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.label, { marginTop: 12 }]}>Confirmer le mot de passe</Text>
+            <TextInput
+              style={styles.input}
               placeholder="Entrez votre mot de passe"
               placeholderTextColor={Colors.textMuted}
-              secureTextEntry={!showPwd}
-              value={form.password}
-              onChangeText={set('password')}
+              secureTextEntry
+              value={form.confirm}
+              onChangeText={set('confirm')}
             />
-            <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPwd(v => !v)}>
-              <Text style={styles.eyeIcon}>{showPwd ? '🙈' : '👁'}</Text>
+
+            {!!error && (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.btn, loading && { opacity: 0.6 }]}
+              onPress={handleRegister}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnText}>{loading ? 'Inscription...' : "Je m'inscris"}</Text>
             </TouchableOpacity>
-          </View>
 
-          <Text style={[styles.label, { marginTop: 12 }]}>Confirmer le mot de passe</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Entrez votre mot de passe"
-            placeholderTextColor={Colors.textMuted}
-            secureTextEntry
-            value={form.confirm}
-            onChangeText={set('confirm')}
-          />
-
-          {!!error && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={[styles.btn, loading && { opacity: 0.6 }]}
-            onPress={handleRegister}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.btnText}>{loading ? 'Inscription...' : "Je m'inscris"}</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.legal}>
-            En créant un compte, vous acceptez nos{' '}
-            <Text style={styles.legalLink}>Conditions générales d'utilisation</Text>
-            {' '}et notre{' '}
-            <Text style={styles.legalLink}>Politique de confidentialité</Text>.
-          </Text>
-
-          <TouchableOpacity onPress={() => router.replace('/login')} style={styles.switchWrap}>
-            <Text style={styles.switchText}>
-              Vous avez déjà un compte ? <Text style={styles.switchLink}>Se connecter</Text>
+            <Text style={styles.legal}>
+              En créant un compte, vous acceptez nos{' '}
+              <Text style={styles.legalLink} onPress={() => router.push('/cgu')}>
+                Conditions générales d'utilisation
+              </Text>
+              {' '}et notre{' '}
+              <Text style={styles.legalLink} onPress={() => router.push('/privacy')}>Politique de confidentialité</Text>.
             </Text>
-          </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => router.replace('/login')} style={styles.switchWrap}>
+              <Text style={styles.switchText}>
+                Vous avez déjà un compte ? <Text style={styles.switchLink}>Se connecter</Text>
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -199,10 +212,6 @@ const styles = StyleSheet.create({
   back:      { marginTop: 8, marginBottom: 16, width: 36 },
   backArrow: { fontSize: 22, color: Colors.text },
 
-  logo: {
-    fontFamily: 'BricolageGrotesque_800ExtraBold',
-    fontSize: 26, color: Colors.parme, textAlign: 'center', marginBottom: 24,
-  },
   title: {
     fontFamily: 'BricolageGrotesque_800ExtraBold',
     fontSize: 28, color: Colors.text, marginBottom: 20,
@@ -213,7 +222,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: Colors.border,
     borderRadius: 14, paddingVertical: 14, paddingHorizontal: 20,
   },
-  socialIcon:  { fontSize: 16, color: Colors.text, fontWeight: '700', width: 22, textAlign: 'center' },
   socialLabel: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.text },
 
   divider: {
