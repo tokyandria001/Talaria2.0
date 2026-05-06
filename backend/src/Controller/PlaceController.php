@@ -15,13 +15,19 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 class PlaceController extends AbstractController
 {
     #[Route('', name: 'list', methods: ['GET'])]
-    public function list(Request $request, PlaceRepository $repo): JsonResponse
+    public function list(Request $request, PlaceRepository $repo, EntityManagerInterface $em): JsonResponse
     {
-        $tags   = $request->query->get('tags') ? explode(',', $request->query->get('tags')) : [];
-        $search = $request->query->get('search', '');
-        $bbox   = $request->query->get('bbox') ? explode(',', $request->query->get('bbox')) : [];
-
-        $places = $repo->findByFilters($tags, $search, $bbox);
+        if ($request->query->get('mine') === 'true') {
+            $places = $em->getRepository(Place::class)->findBy(
+                ['createdBy' => $this->getUser()],
+                ['createdAt' => 'DESC'],
+            );
+        } else {
+            $tags   = $request->query->get('tags') ? explode(',', $request->query->get('tags')) : [];
+            $search = $request->query->get('search', '');
+            $bbox   = $request->query->get('bbox') ? explode(',', $request->query->get('bbox')) : [];
+            $places = $repo->findByFilters($tags, $search, $bbox);
+        }
 
         return $this->json([
             'places' => array_map([$this, 'serialize'], $places),

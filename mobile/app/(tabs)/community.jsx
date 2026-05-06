@@ -11,6 +11,7 @@ import ArticleDetailModal from '../../components/ArticleDetailModal';
 import WriteArticleModal from '../../components/WriteArticleModal';
 import TalariaLogo from '../../components/TalariaLogo';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 
 const CATEGORIES = [
   { value: '',              label: 'Tous' },
@@ -23,6 +24,7 @@ const CATEGORIES = [
 
 export default function CommunityScreen() {
   const { user }   = useAuth();
+  const { theme }  = useTheme();
   const insets      = useSafeAreaInsets();
   const tabBarH     = 64 + (insets.bottom || 16);
 
@@ -84,13 +86,21 @@ export default function CommunityScreen() {
     : '?';
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
+    <SafeAreaView style={[styles.root, { backgroundColor: theme.sableLune }]} edges={['top']}>
 
       {/* Header */}
-      <View style={styles.header}>
-        <View style={{ gap: 2 }}>
-          <TalariaLogo height={38} />
-          <Text style={styles.subtitle}>Communauté</Text>
+      <View style={[styles.header, { backgroundColor: theme.white, borderBottomColor: theme.border }]}>
+        <TalariaLogo height={28} />
+      </View>
+
+      <View style={styles.titleRow}>
+        <View>
+          <Text style={[styles.title, { color: theme.text }]}>Communauté</Text>
+          <Text style={[styles.subtitle, { color: theme.textMuted }]}>
+            {articles.length > 0
+              ? `${articles.length} article${articles.length > 1 ? 's' : ''} disponible${articles.length > 1 ? 's' : ''}`
+              : 'Articles & conseils de voyage'}
+          </Text>
         </View>
         <TouchableOpacity style={styles.writeBtn} onPress={() => openWrite()}>
           <Text style={styles.writeBtnText}>✏️ Écrire</Text>
@@ -211,11 +221,17 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.sableLune },
 
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
+    paddingHorizontal: 20, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    backgroundColor: Colors.white,
   },
-  logo:     { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 22, color: Colors.parme },
-  subtitle: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.textMuted },
+
+  titleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8,
+  },
+  title:    { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 22, color: Colors.text },
+  subtitle: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted, marginTop: 2 },
 
   writeBtn: {
     backgroundColor: Colors.parme,

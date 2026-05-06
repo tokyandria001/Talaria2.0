@@ -2,28 +2,29 @@ import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import ChatbotFAB from '../../components/ChatbotFAB';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
 
   return (
     <View style={{ flex: 1 }}>
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.parme,
-        tabBarInactiveTintColor: Colors.textMuted,
+        tabBarActiveTintColor: theme.parme,
+        tabBarInactiveTintColor: theme.textMuted,
         tabBarLabelStyle: {
           fontFamily: 'BricolageGrotesque_600SemiBold',
           fontSize: 11,
           marginTop: 2,
         },
         tabBarStyle: {
-          backgroundColor: Colors.white,
+          backgroundColor: theme.white,
           borderTopWidth: 1,
-          borderTopColor: Colors.border,
+          borderTopColor: theme.border,
           paddingTop: 8,
           paddingBottom: Math.max(insets.bottom, 8),
           height: 60 + Math.max(insets.bottom, 8),

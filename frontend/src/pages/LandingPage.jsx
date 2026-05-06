@@ -51,11 +51,11 @@ function LandingNav() {
               </svg>
             </a>
             <span className="discord-annotation">
-              Rejoins notre communauté voyage
-              <svg className="annotation-arrow" viewBox="0 0 80 50" fill="none">
-                <path d="M70 5 C50 5, 10 20, 5 45" stroke="#49233d" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-                <path d="M2 38 L5 46 L12 41" stroke="#49233d" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+              <svg className="annotation-arrow" viewBox="0 0 50 55" fill="none">
+                <path d="M5 50 C5 28, 30 12, 45 5" stroke="#49233d" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+                <path d="M38 3 L46 5 L37 11" stroke="#49233d" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
               </svg>
+              Rejoins notre communauté voyage
             </span>
           </div>
 

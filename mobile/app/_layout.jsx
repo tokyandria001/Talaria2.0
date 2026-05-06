@@ -10,6 +10,7 @@ import {
 } from '@expo-google-fonts/bricolage-grotesque';
 import { ActivityIndicator, View } from 'react-native';
 import { AuthProvider } from '../context/AuthContext';
+import { ThemeProvider } from '../context/ThemeContext';
 import { Colors } from '../constants/Colors';
 
 export default function RootLayout() {
@@ -32,6 +33,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
+          <ThemeProvider>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index"      options={{ animation: 'none' }} />
             <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
@@ -40,8 +42,10 @@ export default function RootLayout() {
             <Stack.Screen name="register"   options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="(tabs)"     options={{ animation: 'fade' }} />
             <Stack.Screen name="cgu"        options={{ animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="privacy"    options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="privacy"       options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
           </Stack>
+          </ThemeProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

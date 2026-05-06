@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import client from '../../api/client';
 import TalariaLogo from '../../components/TalariaLogo';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { useFadeIn, useSlideUp, useScaleFade } from '../../_hooks/useEntryAnim';
 
 const { width } = Dimensions.get('window');
@@ -49,11 +50,13 @@ const INSPIRATIONS = [
 export default function HomeScreen() {
   const router  = useRouter();
   const { user } = useAuth();
+  const { theme } = useTheme();
   const insets  = useSafeAreaInsets();
   const tabBarH = 60 + Math.max(insets.bottom, 8);
 
   const [tripCount,    setTripCount]    = useState(null);
   const [articleCount, setArticleCount] = useState(null);
+  const [unreadCount,  setUnreadCount]  = useState(0);
 
   // Animations
   const { opacity: headerOp, scale: headerScale } = useScaleFade(0);
@@ -64,19 +67,25 @@ export default function HomeScreen() {
   useEffect(() => {
     client.get('/api/trips').then(r  => setTripCount(r.data.length)).catch(() => {});
     client.get('/api/articles').then(r => setArticleCount(r.data.articles?.length ?? null)).catch(() => {});
+    client.get('/api/notifications/unread-count').then(r => setUnreadCount(r.data.count ?? 0)).catch(() => {});
   }, []);
 
   const initial = ((user?.firstName?.[0] ?? '') + (user?.lastName?.[0] ?? '') || (user?.email?.[0] ?? '?')).toUpperCase();
 
   return (
-    <View style={s.root}>
+    <View style={[s.root, { backgroundColor: theme.sableLune }]}>
       {/* ── Hero header ── */}
       <Animated.View style={[s.hero, { opacity: headerOp, transform: [{ scale: headerScale }] }]}>
         <SafeAreaView edges={['top']}>
           <View style={s.heroTop}>
             <TalariaLogo height={28} light />
-            <TouchableOpacity style={s.notifBtn}>
+            <TouchableOpacity style={s.notifBtn} onPress={() => router.push('/notifications')}>
               <Ionicons name="notifications-outline" size={22} color="rgba(255,255,255,0.8)" />
+              {unreadCount > 0 && (
+                <View style={s.notifBadge}>
+                  <Text style={s.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -132,7 +141,7 @@ export default function HomeScreen() {
       >
         {/* Quick actions */}
         <Animated.View style={{ opacity: cardsOp, transform: [{ translateY: cardsY }] }}>
-          <Text style={s.sectionTitle}>Explorer</Text>
+          <Text style={[s.sectionTitle, { color: theme.text }]}>Explorer</Text>
           <View style={s.actionsGrid}>
             {QUICK_ACTIONS.map((a) => (
               <TouchableOpacity
@@ -154,7 +163,7 @@ export default function HomeScreen() {
 
         {/* Inspirations */}
         <Animated.View style={{ opacity: inspoOp, transform: [{ translateY: inspoY }] }}>
-          <Text style={s.sectionTitle}>Destinations tendance</Text>
+          <Text style={[s.sectionTitle, { color: theme.text }]}>Destinations tendance</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.inspoRow}>
             {INSPIRATIONS.map((d) => (
               <View key={d.city} style={[s.inspoCard, { backgroundColor: d.color }]}>
@@ -169,10 +178,10 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* CTA banner */}
-        <Animated.View style={[s.banner, { opacity: inspoOp, transform: [{ translateY: inspoY }] }]}>
+        <Animated.View style={[s.banner, { opacity: inspoOp, transform: [{ translateY: inspoY }], backgroundColor: theme.white, borderColor: theme.border }]}>
           <View style={s.bannerLeft}>
-            <Text style={s.bannerTitle}>Planifiez votre prochain voyage</Text>
-            <Text style={s.bannerSub}>Budget, transport, réservations — tout en un.</Text>
+            <Text style={[s.bannerTitle, { color: theme.text }]}>Planifiez votre prochain voyage</Text>
+            <Text style={[s.bannerSub, { color: theme.textMuted }]}>Budget, transport, réservations — tout en un.</Text>
           </View>
           <TouchableOpacity style={s.bannerBtn} onPress={() => router.push('/(tabs)/trips')}>
             <Ionicons name="add" size={20} color={Colors.white} />
@@ -204,6 +213,13 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
   },
+  notifBadge: {
+    position: 'absolute', top: -2, right: -2,
+    minWidth: 17, height: 17, borderRadius: 9,
+    backgroundColor: '#ef4444', borderWidth: 1.5, borderColor: Colors.parme,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+  },
+  notifBadgeText: { fontSize: 9, fontFamily: 'BricolageGrotesque_700Bold', color: '#fff' },
 
   heroBody: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 20 },
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  View, Text, Image, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, StatusBar, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,8 @@ import { Colors } from '../constants/Colors';
 import TalariaLogo from '../components/TalariaLogo';
 import { Ionicons } from '@expo/vector-icons';
 import { useScaleFade, useSlideUp } from '../_hooks/useEntryAnim';
+
+const TALI = require('../assets/Logo-09.png');
 
 export default function RegisterScreen() {
   const router        = useRouter();
@@ -62,12 +64,13 @@ export default function RegisterScreen() {
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
 
-          {/* Logo animé */}
+          {/* Logo + Tali */}
           <Animated.View style={[
-            { alignItems: 'center', marginBottom: 24 },
+            { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 24 },
             { opacity: logoOpacity, transform: [{ scale: logoScale }] },
           ]}>
             <TalariaLogo height={52} />
+            <Image source={TALI} style={{ width: 52, height: 52, tintColor: Colors.parme }} resizeMode="contain" />
           </Animated.View>
 
           {/* Formulaire animé */}

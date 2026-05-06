@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\Article;
 use App\Entity\ArticleLike;
 use App\Entity\Comment;
+use App\Entity\Notification;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -26,11 +27,17 @@ class ArticleController extends AbstractController
     #[Route('', methods: ['GET'])]
     public function list(Request $req): JsonResponse
     {
+        /** @var User|null $me */
+        $me = $this->getUser();
+
         $qb = $this->em->createQueryBuilder()
             ->select('a')
             ->from(Article::class, 'a')
             ->orderBy('a.createdAt', 'DESC');
 
+        if ($req->query->get('mine') === 'true' && $me) {
+            $qb->andWhere('a.author = :me')->setParameter('me', $me);
+        }
         if ($category = $req->query->get('category')) {
             $qb->andWhere('a.category = :cat')->setParameter('cat', $category);
         }
@@ -40,9 +47,6 @@ class ArticleController extends AbstractController
         }
 
         $articles = $qb->getQuery()->getResult();
-
-        /** @var User|null $me */
-        $me = $this->getUser();
         $likedIds = [];
         if ($me) {
             $likes = $this->em->getRepository(ArticleLike::class)->findBy(['user' => $me]);
@@ -176,6 +180,18 @@ class ArticleController extends AbstractController
             $this->em->persist($like);
             $article->setLikesCount($article->getLikesCount() + 1);
             $liked = true;
+
+            // Notification au propriétaire (pas à soi-même)
+            if ($article->getAuthor()->getId() !== $me->getId()) {
+                $fromName = trim(($me->getFirstName() ?? '') . ' ' . ($me->getLastName() ?? '')) ?: $me->getEmail();
+                $notif = (new Notification())
+                    ->setRecipient($article->getAuthor())
+                    ->setFromUser($me)
+                    ->setArticle($article)
+                    ->setType('like')
+                    ->setMessage($fromName . ' a aimé votre article « ' . $article->getTitle() . ' »');
+                $this->em->persist($notif);
+            }
         }
 
         $this->em->flush();
@@ -207,6 +223,19 @@ class ArticleController extends AbstractController
 
         $this->em->persist($comment);
         $article->setCommentsCount($article->getCommentsCount() + 1);
+
+        // Notification au propriétaire (pas à soi-même)
+        if ($article->getAuthor()->getId() !== $me->getId()) {
+            $fromName = trim(($me->getFirstName() ?? '') . ' ' . ($me->getLastName() ?? '')) ?: $me->getEmail();
+            $notif = (new Notification())
+                ->setRecipient($article->getAuthor())
+                ->setFromUser($me)
+                ->setArticle($article)
+                ->setType('comment')
+                ->setMessage($fromName . ' a commenté votre article « ' . $article->getTitle() . ' »');
+            $this->em->persist($notif);
+        }
+
         $this->em->flush();
 
         return $this->json($this->serializeComment($comment, $me), 201);

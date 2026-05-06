@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, Alert, ActivityIndicator,
+  ScrollView, Alert, ActivityIndicator, Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import client from '../../api/client';
 import TalariaLogo from '../../components/TalariaLogo';
-import { Colors } from '../../constants/Colors';
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout }      = useAuth();
+  const { theme, isDark, toggleTheme } = useTheme();
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
   const tabBarH  = 64 + (insets.bottom || 16);
@@ -68,91 +70,109 @@ export default function ProfileScreen() {
     }
   };
 
-  return (
-    <SafeAreaView style={styles.root} edges={['top']}>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: tabBarH + 16 }]} showsVerticalScrollIndicator={false}>
+  const t = theme;
 
+  return (
+    <SafeAreaView style={[s.root, { backgroundColor: t.sableLune }]} edges={['top']}>
+      <ScrollView
+        contentContainerStyle={[s.scroll, { paddingBottom: tabBarH + 16 }]}
+        showsVerticalScrollIndicator={false}
+      >
         <TalariaLogo height={42} />
-        <Text style={styles.pageTitle}>Mon profil</Text>
+        <Text style={[s.pageTitle, { color: t.parme }]}>Mon profil</Text>
 
         {/* Avatar card */}
-        <View style={styles.card}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>{initials}</Text>
+        <View style={[s.card, { backgroundColor: t.white, borderColor: t.border }]}>
+          <View style={[s.avatarCircle, { backgroundColor: t.parme }]}>
+            <Text style={s.avatarText}>{initials}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.userName}>{user?.firstName ?? ''} {user?.lastName ?? ''}</Text>
-            <Text style={styles.userEmail}>{user?.email}</Text>
-            {user?.username && <Text style={styles.userPseudo}>@{user.username}</Text>}
+            <Text style={[s.userName, { color: t.text }]}>{user?.firstName ?? ''} {user?.lastName ?? ''}</Text>
+            <Text style={[s.userEmail, { color: t.textMuted }]}>{user?.email}</Text>
+            {user?.username && <Text style={[s.userPseudo, { color: t.parme }]}>@{user.username}</Text>}
+          </View>
+        </View>
+
+        {/* Apparence */}
+        <View style={[s.card, { backgroundColor: t.white, borderColor: t.border }]}>
+          <Text style={[s.sectionTitle, { color: t.text }]}>Apparence</Text>
+          <View style={s.settingRow}>
+            <View style={s.settingLeft}>
+              <View style={[s.settingIcon, { backgroundColor: isDark ? '#2e1a40' : '#f0e8f5' }]}>
+                <Ionicons name={isDark ? 'moon' : 'sunny'} size={18} color={t.parme} />
+              </View>
+              <View>
+                <Text style={[s.settingLabel, { color: t.text }]}>Mode sombre</Text>
+                <Text style={[s.settingDesc, { color: t.textMuted }]}>{isDark ? 'Activé' : 'Désactivé'}</Text>
+              </View>
+            </View>
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              thumbColor={isDark ? t.parme : '#f4f4f4'}
+              trackColor={{ false: t.border, true: t.parmeLight }}
+            />
           </View>
         </View>
 
         {/* Change password */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Changer le mot de passe</Text>
+        <View style={[s.card, { backgroundColor: t.white, borderColor: t.border }]}>
+          <Text style={[s.sectionTitle, { color: t.text }]}>Changer le mot de passe</Text>
 
-          <Text style={styles.label}>Mot de passe actuel</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            placeholderTextColor={Colors.textMuted}
-            secureTextEntry
-            value={pwdForm.currentPassword}
-            onChangeText={v => setPwdForm(f => ({ ...f, currentPassword: v }))}
-          />
-          <Text style={styles.label}>Nouveau mot de passe</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            placeholderTextColor={Colors.textMuted}
-            secureTextEntry
-            value={pwdForm.newPassword}
-            onChangeText={v => setPwdForm(f => ({ ...f, newPassword: v }))}
-          />
-          <Text style={styles.label}>Confirmer</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            placeholderTextColor={Colors.textMuted}
-            secureTextEntry
-            value={pwdForm.confirm}
-            onChangeText={v => setPwdForm(f => ({ ...f, confirm: v }))}
-          />
+          {['Mot de passe actuel', 'Nouveau mot de passe', 'Confirmer'].map((label, i) => {
+            const key = ['currentPassword', 'newPassword', 'confirm'][i];
+            return (
+              <View key={key}>
+                <Text style={[s.label, { color: t.text }]}>{label}</Text>
+                <TextInput
+                  style={[s.input, { backgroundColor: t.inputBg, color: t.text }]}
+                  placeholder="••••••••"
+                  placeholderTextColor={t.textMuted}
+                  secureTextEntry
+                  value={pwdForm[key]}
+                  onChangeText={v => setPwdForm(f => ({ ...f, [key]: v }))}
+                />
+              </View>
+            );
+          })}
 
           {pwdMsg && (
-            <Text style={[styles.msg, { color: pwdMsg.type === 'success' ? '#16a34a' : Colors.error }]}>
+            <Text style={[s.msg, { color: pwdMsg.type === 'success' ? '#16a34a' : t.error }]}>
               {pwdMsg.text}
             </Text>
           )}
 
           <TouchableOpacity
-            style={[styles.btn, savingPwd && { opacity: 0.6 }]}
+            style={[s.btn, { backgroundColor: t.parme }, savingPwd && { opacity: 0.6 }]}
             onPress={handleChangePwd}
             disabled={savingPwd}
           >
             {savingPwd
-              ? <ActivityIndicator size="small" color={Colors.white} />
-              : <Text style={styles.btnText}>Modifier le mot de passe</Text>
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={s.btnText}>Modifier le mot de passe</Text>
             }
           </TouchableOpacity>
         </View>
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Se déconnecter</Text>
+        <TouchableOpacity
+          style={[s.logoutBtn, { borderColor: t.border, backgroundColor: t.white }]}
+          onPress={handleLogout}
+        >
+          <Text style={[s.logoutText, { color: t.textMuted }]}>Se déconnecter</Text>
         </TouchableOpacity>
 
         {/* Danger zone */}
-        <View style={[styles.card, styles.dangerCard]}>
-          <Text style={styles.dangerTitle}>Zone dangereuse</Text>
-          <Text style={styles.dangerText}>
+        <View style={[s.card, s.dangerCard]}>
+          <Text style={s.dangerTitle}>Zone dangereuse</Text>
+          <Text style={[s.dangerText, { color: t.textMuted }]}>
             La suppression de votre compte est définitive. Tous vos articles, commentaires et likes seront effacés.
           </Text>
           <TouchableOpacity
-            style={styles.dangerBtn}
+            style={s.dangerBtn}
             onPress={() => { setDeleteModal(true); setDeletePwd(''); }}
           >
-            <Text style={styles.dangerBtnText}>Supprimer mon compte</Text>
+            <Text style={s.dangerBtnText}>Supprimer mon compte</Text>
           </TouchableOpacity>
         </View>
 
@@ -160,37 +180,37 @@ export default function ProfileScreen() {
 
       {/* Delete account modal */}
       {deleteModal && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Confirmer la suppression</Text>
-            <Text style={styles.modalText}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalCard, { backgroundColor: t.white }]}>
+            <Text style={s.modalTitle}>Confirmer la suppression</Text>
+            <Text style={[s.modalText, { color: t.textMuted }]}>
               Cette action est irréversible. Entrez votre mot de passe pour confirmer.
             </Text>
             <TextInput
-              style={styles.input}
+              style={[s.input, { backgroundColor: t.inputBg, color: t.text }]}
               placeholder="Mot de passe"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={t.textMuted}
               secureTextEntry
               autoFocus
               value={deletePwd}
               onChangeText={setDeletePwd}
             />
-            <View style={styles.modalActions}>
+            <View style={s.modalActions}>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={[s.cancelBtn, { borderColor: t.border }]}
                 onPress={() => setDeleteModal(false)}
                 disabled={deleting}
               >
-                <Text style={styles.cancelBtnText}>Annuler</Text>
+                <Text style={[s.cancelBtnText, { color: t.textMuted }]}>Annuler</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.dangerBtn, { flex: 1 }, deleting && { opacity: 0.6 }]}
+                style={[s.dangerBtn, { flex: 1 }, deleting && { opacity: 0.6 }]}
                 onPress={handleDeleteAccount}
                 disabled={deleting || !deletePwd}
               >
                 {deleting
-                  ? <ActivityIndicator size="small" color={Colors.white} />
-                  : <Text style={styles.dangerBtnText}>Confirmer</Text>
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={s.dangerBtnText}>Confirmer</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -201,78 +221,51 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root:      { flex: 1, backgroundColor: Colors.sableLune },
+const s = StyleSheet.create({
+  root:      { flex: 1 },
   scroll:    { padding: 16, gap: 14 },
-  pageTitle: {
-    fontFamily: 'BricolageGrotesque_800ExtraBold',
-    fontSize: 26, color: Colors.parme, marginBottom: 4,
-  },
+  pageTitle: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 26, marginBottom: 4 },
 
-  card: {
-    backgroundColor: Colors.white, borderRadius: 20,
-    padding: 18, gap: 10,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
+  card: { borderRadius: 20, padding: 18, gap: 10, borderWidth: 1,
+          shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8,
+          shadowOffset: { width: 0, height: 2 }, elevation: 2 },
 
-  avatarCircle: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: Colors.parme, alignItems: 'center', justifyContent: 'center',
-  },
-  avatarText: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 22, color: Colors.white },
-  userName:   { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16, color: Colors.text },
-  userEmail:  { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted },
-  userPseudo: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.parme },
+  avatarCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  avatarText:   { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 22, color: '#fff' },
+  userName:     { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16 },
+  userEmail:    { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13 },
+  userPseudo:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13 },
+  sectionTitle: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16 },
 
-  sectionTitle: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16, color: Colors.text },
+  settingRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  settingLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  settingIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  settingLabel:{ fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14 },
+  settingDesc: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, marginTop: 1 },
 
-  label: {
-    fontFamily: 'BricolageGrotesque_600SemiBold',
-    fontSize: 13, color: Colors.text,
-  },
-  input: {
-    backgroundColor: Colors.inputBg, borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 14, fontFamily: 'BricolageGrotesque_400Regular', color: Colors.text,
-  },
+  label: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13 },
+  input: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+           fontSize: 14, fontFamily: 'BricolageGrotesque_400Regular' },
+  msg:   { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13 },
 
-  msg: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13 },
+  btn:     { borderRadius: 100, paddingVertical: 13, alignItems: 'center' },
+  btnText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: '#fff' },
 
-  btn: {
-    backgroundColor: Colors.parme,
-    borderRadius: 100, paddingVertical: 13, alignItems: 'center',
-  },
-  btnText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: Colors.white },
+  logoutBtn:  { borderWidth: 1.5, borderRadius: 100, paddingVertical: 13, alignItems: 'center' },
+  logoutText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14 },
 
-  logoutBtn: {
-    borderWidth: 1.5, borderColor: Colors.border,
-    borderRadius: 100, paddingVertical: 13, alignItems: 'center',
-    backgroundColor: Colors.white,
-  },
-  logoutText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: Colors.textMuted },
+  dangerCard:    { borderWidth: 1.5, borderColor: '#fca5a5', backgroundColor: '#fff5f5' },
+  dangerTitle:   { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16, color: '#dc2626' },
+  dangerText:    { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13 },
+  dangerBtn:     { backgroundColor: '#dc2626', borderRadius: 100, paddingVertical: 12, alignItems: 'center' },
+  dangerBtnText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: '#fff' },
 
-  dangerCard:  { borderWidth: 1.5, borderColor: '#fca5a5', backgroundColor: '#fff5f5' },
-  dangerTitle: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16, color: '#dc2626' },
-  dangerText:  { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted },
-  dangerBtn:   { backgroundColor: '#dc2626', borderRadius: 100, paddingVertical: 12, alignItems: 'center' },
-  dangerBtnText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: Colors.white },
-
-  modalOverlay: {
-    position: 'absolute', inset: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center', alignItems: 'center', padding: 20,
-  },
-  modalCard: {
-    backgroundColor: Colors.white, borderRadius: 24,
-    padding: 24, width: '100%', gap: 14,
-  },
-  modalTitle: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 18, color: '#dc2626' },
-  modalText:  { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14, color: Colors.textMuted },
+  modalOverlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
+                  justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalCard:    { borderRadius: 24, padding: 24, width: '100%', gap: 14 },
+  modalTitle:   { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 18, color: '#dc2626' },
+  modalText:    { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14 },
   modalActions: { flexDirection: 'row', gap: 10 },
-  cancelBtn: {
-    flex: 1, borderWidth: 1.5, borderColor: Colors.border,
-    borderRadius: 100, paddingVertical: 12, alignItems: 'center',
-  },
-  cancelBtnText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: Colors.textMuted },
+  cancelBtn:    { flex: 1, borderWidth: 1.5, borderRadius: 100, paddingVertical: 12, alignItems: 'center' },
+  cancelBtnText:{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14 },
 });

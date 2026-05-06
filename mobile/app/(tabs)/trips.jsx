@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, FlatList,
+  View, Text, Image, StyleSheet, TouchableOpacity, FlatList,
   RefreshControl, ActivityIndicator, ScrollView, TextInput,
   Modal, Alert, Switch, Linking,
 } from 'react-native';
@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import client from '../../api/client';
 import TalariaLogo from '../../components/TalariaLogo';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 
 const TRANSPORT = [
   { value: 'voiture', label: 'Voiture', icon: '🚗' },
@@ -426,6 +427,7 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
    ════════════════════════════════════ */
 export default function TripsScreen() {
   const { user }   = useAuth();
+  const { theme }  = useTheme();
   const insets     = useSafeAreaInsets();
   const tabBarH    = 64 + (insets.bottom || 16);
 
@@ -482,16 +484,16 @@ export default function TripsScreen() {
   const openCreate = () => { setEditTrip(null); setShowModal(true); };
 
   return (
-    <SafeAreaView style={s.root} edges={['top']}>
+    <SafeAreaView style={[s.root, { backgroundColor: theme.sableLune }]} edges={['top']}>
       {/* Header */}
-      <View style={s.header}>
+      <View style={[s.header, { backgroundColor: theme.white, borderBottomColor: theme.border }]}>
         <TalariaLogo height={28} />
       </View>
 
       <View style={s.titleRow}>
         <View>
-          <Text style={s.title}>Mes voyages</Text>
-          <Text style={s.subtitle}>
+          <Text style={[s.title, { color: theme.text }]}>Mes voyages</Text>
+          <Text style={[s.subtitle, { color: theme.textMuted }]}>
             {trips.length > 0
               ? `${trips.length} voyage${trips.length > 1 ? 's' : ''} planifié${trips.length > 1 ? 's' : ''}`
               : 'Planifiez votre prochain voyage'}
@@ -509,9 +511,9 @@ export default function TripsScreen() {
         </View>
       ) : trips.length === 0 ? (
         <View style={s.empty}>
-          <Text style={s.emptyIcon}>✈️</Text>
-          <Text style={s.emptyTitle}>Aucun voyage planifié</Text>
-          <Text style={s.emptySub}>Créez votre premier voyage et gérez votre budget et vos réservations.</Text>
+          <Image source={require('../../assets/STICKERS.png')} style={s.emptyIcon} resizeMode="contain" />
+          <Text style={[s.emptyTitle, { color: theme.text }]}>Aucun voyage planifié</Text>
+          <Text style={[s.emptySub, { color: theme.textMuted }]}>Créez votre premier voyage et gérez votre budget et vos réservations.</Text>
           <TouchableOpacity style={s.createBtn} onPress={openCreate}>
             <Text style={s.createBtnText}>Créer mon premier voyage</Text>
           </TouchableOpacity>
@@ -569,7 +571,7 @@ const s = StyleSheet.create({
     flex: 1, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 32,
   },
-  emptyIcon:  { fontSize: 48, marginBottom: 16 },
+  emptyIcon:  { width: 140, height: 140, marginBottom: 16 },
   emptyTitle: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 18, color: Colors.text, marginBottom: 8 },
   emptySub:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14, color: Colors.textMuted, textAlign: 'center', marginBottom: 24 },
 

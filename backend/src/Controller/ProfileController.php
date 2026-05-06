@@ -5,6 +5,8 @@ namespace App\Controller;
 use App\Entity\Article;
 use App\Entity\ArticleLike;
 use App\Entity\Comment;
+use App\Entity\Place;
+use App\Entity\Trip;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -17,12 +19,19 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[Route('/api/profile', name: 'profile_')]
 class ProfileController extends AbstractController
 {
+    public function __construct(private EntityManagerInterface $em) {}
+
     #[Route('', name: 'get', methods: ['GET'])]
     public function get(): JsonResponse
     {
         /** @var User $user */
         $user = $this->getUser();
-        return $this->json(['user' => $this->serializeUser($user)]);
+        $counts = [
+            'articles' => $this->em->getRepository(Article::class)->count(['author' => $user]),
+            'places'   => $this->em->getRepository(Place::class)->count(['createdBy' => $user]),
+            'trips'    => $this->em->getRepository(Trip::class)->count(['user' => $user]),
+        ];
+        return $this->json(['user' => $this->serializeUser($user), 'counts' => $counts]);
     }
 
     #[Route('', name: 'update', methods: ['PUT', 'PATCH'])]
