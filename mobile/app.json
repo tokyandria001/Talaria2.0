@@ -4,12 +4,12 @@
     "slug": "talaria",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/DA_3.svg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "talaria",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/DA_3.svg",
       "resizeMode": "contain",
       "backgroundColor": "#4f203f"
     },
@@ -17,14 +17,15 @@
       "supportsTablet": false
     },
     "android": {
+      "package": "com.talaria.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/Logo-08.png",
-        "backgroundColor": "#4f203f"
+        "foregroundImage": "./assets/DA_3.svg",
+        "backgroundColor": "#fcf9f1"
       },
       "edgeToEdgeEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/DA_3.svg"
     },
     "plugins": [
       "expo-router",
@@ -32,6 +33,13 @@
     ],
     "experiments": {
       "typedRoutes": false
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f2c40899-dba8-409c-9d9e-573d0eca85ae"
+      }
+    },
+    "owner": "toto2k01"
   }
 }
