@@ -3,6 +3,8 @@
 namespace App\Controller;
 
 use App\Entity\Place;
+use App\Entity\PlaceLike;
+use App\Entity\User;
 use App\Repository\PlaceRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -17,27 +19,71 @@ class PlaceController extends AbstractController
     #[Route('', name: 'list', methods: ['GET'])]
     public function list(Request $request, PlaceRepository $repo, EntityManagerInterface $em): JsonResponse
     {
+        /** @var User|null $me */
+        $me = $this->getUser();
+
         if ($request->query->get('mine') === 'true') {
             $places = $em->getRepository(Place::class)->findBy(
-                ['createdBy' => $this->getUser()],
+                ['createdBy' => $me],
                 ['createdAt' => 'DESC'],
             );
         } else {
-            $tags   = $request->query->get('tags') ? explode(',', $request->query->get('tags')) : [];
-            $search = $request->query->get('search', '');
-            $bbox   = $request->query->get('bbox') ? explode(',', $request->query->get('bbox')) : [];
-            $places = $repo->findByFilters($tags, $search, $bbox);
+            $tags        = $request->query->get('tags') ? explode(',', $request->query->get('tags')) : [];
+            $search      = $request->query->get('search', '');
+            $bbox        = $request->query->get('bbox') ? explode(',', $request->query->get('bbox')) : [];
+            $recommended = $request->query->get('recommended') === 'true';
+            $places      = $repo->findByFilters($tags, $search, $bbox, $recommended ? $me : null);
+        }
+
+        $likedIds = [];
+        if ($me) {
+            $likes = $em->getRepository(PlaceLike::class)->findBy(['user' => $me]);
+            foreach ($likes as $like) {
+                $likedIds[$like->getPlace()->getId()] = true;
+            }
         }
 
         return $this->json([
-            'places' => array_map([$this, 'serialize'], $places),
+            'places' => array_map(fn(Place $p) => $this->serialize($p, $likedIds), $places),
         ]);
     }
 
     #[Route('/{id}', name: 'get', methods: ['GET'])]
-    public function get(Place $place): JsonResponse
+    public function get(Place $place, EntityManagerInterface $em): JsonResponse
     {
-        return $this->json(['place' => $this->serialize($place)]);
+        /** @var User|null $me */
+        $me       = $this->getUser();
+        $likedIds = [];
+        if ($me && $em->getRepository(PlaceLike::class)->findOneBy(['place' => $place, 'user' => $me])) {
+            $likedIds[$place->getId()] = true;
+        }
+
+        return $this->json(['place' => $this->serialize($place, $likedIds)]);
+    }
+
+    /* ── Toggle like ──────────────────────────── */
+    #[Route('/{id}/like', name: 'like', methods: ['POST'])]
+    public function toggleLike(Place $place, EntityManagerInterface $em): JsonResponse
+    {
+        /** @var User $me */
+        $me       = $this->getUser();
+        $likeRepo = $em->getRepository(PlaceLike::class);
+        $existing = $likeRepo->findOneBy(['place' => $place, 'user' => $me]);
+
+        if ($existing) {
+            $em->remove($existing);
+            $place->setLikesCount(max(0, $place->getLikesCount() - 1));
+            $liked = false;
+        } else {
+            $like = (new PlaceLike())->setPlace($place)->setUser($me);
+            $em->persist($like);
+            $place->setLikesCount($place->getLikesCount() + 1);
+            $liked = true;
+        }
+
+        $em->flush();
+
+        return $this->json(['liked' => $liked, 'likesCount' => $place->getLikesCount()]);
     }
 
     #[Route('', name: 'create', methods: ['POST'])]
@@ -89,7 +135,7 @@ class PlaceController extends AbstractController
         return $this->json(null, 204);
     }
 
-    private function serialize(Place $place): array
+    private function serialize(Place $place, array $likedIds = []): array
     {
         $user = $place->getCreatedBy();
         return [
@@ -101,6 +147,8 @@ class PlaceController extends AbstractController
             'latitude'     => $place->getLatitude(),
             'longitude'    => $place->getLongitude(),
             'photos'       => $place->getPhotos(),
+            'likesCount'   => $place->getLikesCount(),
+            'liked'        => isset($likedIds[$place->getId()]),
             'createdBy'    => $user ? ['id' => $user->getId(), 'email' => $user->getEmail()] : null,
             'createdAt'    => $place->getCreatedAt()?->format(\DateTimeInterface::ATOM),
         ];

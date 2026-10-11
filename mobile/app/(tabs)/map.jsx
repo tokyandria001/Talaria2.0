@@ -23,12 +23,14 @@ export default function MapScreen() {
   const mapRef = useRef(null);
   const [places,      setPlaces]      = useState([]);
   const [search,      setSearch]      = useState('');
-  const [activeTag,   setActiveTag]   = useState('');
+  const [activeTags,  setActiveTags]  = useState([]);
+  const [recommended, setRecommended] = useState(false);
   const [userLoc,     setUserLoc]     = useState(null);
   const [showAdd,     setShowAdd]     = useState(false);
   const [addCoords,   setAddCoords]   = useState(null);
   const [addForm,     setAddForm]     = useState({ name: '', description: '', tags: [] });
   const [saving,      setSaving]      = useState(false);
+  const [selected,    setSelected]    = useState(null);
 
   // Géolocalisation
   useEffect(() => {
@@ -44,12 +46,27 @@ export default function MapScreen() {
   const fetchPlaces = useCallback(async () => {
     try {
       const params = {};
-      if (activeTag) params.tags = activeTag;
-      if (search)    params.search = search;
+      if (activeTags.length) params.tags = activeTags.join(',');
+      if (search)            params.search = search;
+      if (recommended)       params.recommended = 'true';
       const { data } = await client.get('/api/places', { params });
       setPlaces(data.places ?? []);
     } catch { /* silently ignore if places API not available */ }
-  }, [activeTag, search]);
+  }, [activeTags, search, recommended]);
+
+  const toggleTag = (value) => {
+    if (value === '') { setActiveTags([]); return; }
+    setActiveTags((prev) => prev.includes(value) ? prev.filter((t) => t !== value) : [...prev, value]);
+  };
+
+  const toggleLike = async (place) => {
+    try {
+      const { data } = await client.post(`/api/places/${place.id}/like`);
+      const patch = (p) => p.id === place.id ? { ...p, liked: data.liked, likesCount: data.likesCount } : p;
+      setPlaces((prev) => prev.map(patch));
+      setSelected((prev) => prev && prev.id === place.id ? patch(prev) : prev);
+    } catch { /* ignore */ }
+  };
 
   useEffect(() => { fetchPlaces(); }, [fetchPlaces]);
 
@@ -109,10 +126,14 @@ export default function MapScreen() {
             <View style={styles.markerPin}>
               <Text style={styles.markerIcon}>{TAG_ICONS[p.tags?.[0]] ?? '📍'}</Text>
             </View>
-            <Callout style={styles.callout}>
+            <Callout style={styles.callout} onPress={() => setSelected(p)}>
               <Text style={styles.calloutName}>{p.name}</Text>
               {p.description && <Text style={styles.calloutDesc}>{p.description}</Text>}
-              {p.averagePrice && <Text style={styles.calloutPrice}>~{p.averagePrice} €</Text>}
+              <View style={styles.calloutMeta}>
+                {p.averagePrice ? <Text style={styles.calloutPrice}>~{p.averagePrice} €</Text> : null}
+                <Text style={styles.calloutLikes}>❤️ {p.likesCount ?? 0}</Text>
+              </View>
+              <Text style={styles.calloutHint}>Toucher pour voir / aimer</Text>
             </Callout>
           </Marker>
         ))}
@@ -138,20 +159,30 @@ export default function MapScreen() {
           )}
         </View>
 
-        {/* Category filters */}
+        {/* Category filters (multi-sélection) */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-          {CATEGORIES.map((c) => (
-            <TouchableOpacity
-              key={c.value}
-              style={[styles.pill, activeTag === c.value && styles.pillActive]}
-              onPress={() => setActiveTag(c.value)}
-            >
-              <Text style={styles.pillIcon}>{c.icon}</Text>
-              <Text style={[styles.pillLabel, activeTag === c.value && styles.pillLabelActive]}>
-                {c.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <TouchableOpacity
+            style={[styles.pill, recommended && styles.pillActive]}
+            onPress={() => setRecommended((v) => !v)}
+          >
+            <Text style={styles.pillIcon}>✨</Text>
+            <Text style={[styles.pillLabel, recommended && styles.pillLabelActive]}>Pour vous</Text>
+          </TouchableOpacity>
+          {CATEGORIES.map((c) => {
+            const active = c.value === '' ? activeTags.length === 0 : activeTags.includes(c.value);
+            return (
+              <TouchableOpacity
+                key={c.value}
+                style={[styles.pill, active && styles.pillActive]}
+                onPress={() => toggleTag(c.value)}
+              >
+                <Text style={styles.pillIcon}>{c.icon}</Text>
+                <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>
+                  {c.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </SafeAreaView>
 
@@ -227,6 +258,40 @@ export default function MapScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Place Detail Modal */}
+      <Modal visible={!!selected} animationType="fade" transparent onRequestClose={() => setSelected(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            {selected && (
+              <>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{selected.name}</Text>
+                  <TouchableOpacity onPress={() => setSelected(null)}>
+                    <Text style={{ fontSize: 20, color: Colors.textMuted }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {selected.description ? (
+                  <Text style={[styles.calloutDesc, { marginBottom: 16, fontSize: 14 }]}>{selected.description}</Text>
+                ) : null}
+
+                <View style={styles.calloutMeta}>
+                  {selected.averagePrice ? <Text style={styles.calloutPrice}>~{selected.averagePrice} €</Text> : null}
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.saveBtn, { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 16 }]}
+                  onPress={() => toggleLike(selected)}
+                >
+                  <Text style={{ fontSize: 16 }}>{selected.liked ? '❤️' : '🤍'}</Text>
+                  <Text style={styles.saveBtnText}>{selected.likesCount ?? 0} j'aime</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -278,7 +343,10 @@ const styles = StyleSheet.create({
   callout:      { width: 200, padding: 10, backgroundColor: Colors.white, borderRadius: 10 },
   calloutName:  { fontSize: 14, fontWeight: '700', color: Colors.parme, marginBottom: 4 },
   calloutDesc:  { fontSize: 12, color: Colors.textMuted },
-  calloutPrice: { fontSize: 12, fontWeight: '600', color: Colors.text, marginTop: 4 },
+  calloutMeta:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  calloutPrice: { fontSize: 12, fontWeight: '600', color: Colors.text },
+  calloutLikes: { fontSize: 12, fontWeight: '600', color: Colors.text },
+  calloutHint:  { fontSize: 10, color: Colors.textMuted, marginTop: 6, fontStyle: 'italic' },
 
   controls: {
     position: 'absolute', right: 16, bottom: 130,

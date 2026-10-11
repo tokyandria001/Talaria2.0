@@ -39,6 +39,9 @@ class Place
     #[ORM\Column(type: 'json')]
     private array $photos = [];
 
+    #[ORM\Column(options: ['default' => 0])]
+    private int $likesCount = 0;
+
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: true)]
     private ?User $createdBy = null;
@@ -74,6 +77,9 @@ class Place
 
     public function getPhotos(): array { return $this->photos; }
     public function setPhotos(array $photos): static { $this->photos = $photos; return $this; }
+
+    public function getLikesCount(): int { return $this->likesCount; }
+    public function setLikesCount(int $likesCount): static { $this->likesCount = $likesCount; return $this; }
 
     public function getCreatedBy(): ?User { return $this->createdBy; }
     public function setCreatedBy(?User $createdBy): static { $this->createdBy = $createdBy; return $this; }

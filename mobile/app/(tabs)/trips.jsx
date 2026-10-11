@@ -26,6 +26,17 @@ const BOOKING_TYPES = [
   { value: 'autre',    label: 'Autre',    icon: '🔗' },
 ];
 
+const ACCOM_TYPES = [
+  { value: 'hotel',  label: 'Hôtel',  icon: '🏨' },
+  { value: 'airbnb', label: 'Airbnb', icon: '🏠' },
+  { value: 'autre',  label: 'Autre',  icon: '🔗' },
+];
+
+const EMPTY_ACCOM = {
+  name: '', type: 'hotel', checkIn: '', checkOut: '',
+  price: '', hasSpecialPrice: false, specialPriceNote: '', link: '',
+};
+
 const fmtDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
 const fmtEur  = (n) => n != null ? `${n.toLocaleString('fr-FR')} €` : '—';
 const nights  = (s, e) => Math.max(0, Math.round((new Date(e) - new Date(s)) / 86_400_000));
@@ -146,9 +157,75 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
   const [bLabel, setBLabel] = useState('');
   const [bUrl, setBUrl] = useState('');
 
+  const [accommodations,  setAccommodations]  = useState([]);
+  const [accomForm,       setAccomForm]       = useState(EMPTY_ACCOM);
+  const [editingAccomId,  setEditingAccomId]  = useState(null);
+  const [savingAccom,     setSavingAccom]     = useState(false);
+
+  const resetAccomForm = () => { setAccomForm(EMPTY_ACCOM); setEditingAccomId(null); };
+
+  const fetchAccommodations = useCallback(async () => {
+    if (!trip?.id) return;
+    try {
+      const { data } = await client.get(`/api/trips/${trip.id}/accommodations`);
+      setAccommodations(data);
+    } catch { setAccommodations([]); }
+  }, [trip?.id]);
+
+  const startEditAccom = (a) => {
+    setAccomForm({
+      name: a.name, type: a.type, checkIn: a.checkIn, checkOut: a.checkOut,
+      price: a.price != null ? String(a.price) : '',
+      hasSpecialPrice: a.hasSpecialPrice, specialPriceNote: a.specialPriceNote ?? '',
+      link: a.link ?? '',
+    });
+    setEditingAccomId(a.id);
+  };
+
+  const saveAccom = async () => {
+    if (!accomForm.name.trim() || !accomForm.checkIn || !accomForm.checkOut) {
+      Alert.alert('Champs manquants', 'Nom et dates sont requis.');
+      return;
+    }
+    setSavingAccom(true);
+    try {
+      const payload = { ...accomForm, price: accomForm.price !== '' ? parseInt(accomForm.price) : null };
+      const res = editingAccomId
+        ? await client.patch(`/api/trips/${trip.id}/accommodations/${editingAccomId}`, payload)
+        : await client.post(`/api/trips/${trip.id}/accommodations`, payload);
+      setAccommodations(prev => {
+        const next = editingAccomId ? prev.map(a => a.id === res.data.id ? res.data : a) : [...prev, res.data];
+        return [...next].sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+      });
+      resetAccomForm();
+    } catch (err) {
+      Alert.alert('Erreur', err.response?.data?.message || "Impossible d'enregistrer le logement.");
+    } finally {
+      setSavingAccom(false);
+    }
+  };
+
+  const deleteAccom = (a) => {
+    Alert.alert('Supprimer ce logement ?', a.name, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer', style: 'destructive',
+        onPress: async () => {
+          try {
+            await client.delete(`/api/trips/${trip.id}/accommodations/${a.id}`);
+            setAccommodations(prev => prev.filter(x => x.id !== a.id));
+            if (editingAccomId === a.id) resetAccomForm();
+          } catch {}
+        },
+      },
+    ]);
+  };
+
   useEffect(() => {
     if (visible) {
       setStep(0); setError('');
+      resetAccomForm();
+      fetchAccommodations();
       setForm(trip ? {
         title:            trip.title            ?? '',
         destination:      trip.destination,
@@ -168,7 +245,7 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
         bookingLinks:     trip.bookingLinks     ?? [],
       } : { ...EMPTY });
     }
-  }, [visible, trip]);
+  }, [visible, trip, fetchAccommodations]);
 
   const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -218,14 +295,14 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
           <View style={{ flex: 1 }}>
             <Text style={ms.headerTitle}>{isEdit ? 'Modifier le voyage' : 'Nouveau voyage'}</Text>
             <Text style={ms.headerSub}>
-              {step === 0 ? 'Infos de base' : step === 1 ? 'Transport' : 'Réservations'}
+              {['Infos de base', 'Transport', 'Réservations', 'Logements'][step]}
             </Text>
           </View>
         </View>
 
         {/* Steps */}
         <View style={ms.steps}>
-          {[0, 1, 2].map(i => (
+          {[0, 1, 2, 3].map(i => (
             <View key={i} style={[ms.stepDot, i < step ? ms.stepDone : i === step ? ms.stepActive : null]} />
           ))}
         </View>
@@ -395,6 +472,119 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
             </>
           )}
 
+          {/* ── Step 3 : Logements ── */}
+          {step === 3 && (
+            <>
+              {!isEdit ? (
+                <View style={ms.fuelPreview}>
+                  <Text style={ms.fuelPreviewText}>
+                    Enregistrez le voyage pour pouvoir ajouter ses logements (road trip = plusieurs logements à des dates différentes).
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  {accommodations.length > 0 && (
+                    <View style={{ gap: 10, marginBottom: 16 }}>
+                      {accommodations.map((a) => (
+                        <View key={a.id} style={ms.accomCard}>
+                          <View style={ms.accomHeader}>
+                            <Text style={ms.accomName}>
+                              {ACCOM_TYPES.find(t => t.value === a.type)?.icon} {a.name}
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                              <TouchableOpacity onPress={() => startEditAccom(a)}>
+                                <Ionicons name="pencil-outline" size={15} color={Colors.parme} />
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={() => deleteAccom(a)}>
+                                <Ionicons name="trash-outline" size={15} color="#dc2626" />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                          <Text style={ms.accomDates}>
+                            {fmtDate(a.checkIn)} → {fmtDate(a.checkOut)}{'  '}
+                            <Text style={{ color: Colors.textMuted }}>({nights(a.checkIn, a.checkOut)} nuit{nights(a.checkIn, a.checkOut) > 1 ? 's' : ''})</Text>
+                          </Text>
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                            {a.price != null && <Text style={ms.accomMeta}>💰 {fmtEur(a.price)}</Text>}
+                            {a.hasSpecialPrice && (
+                              <Text style={ms.accomBadge}>🏷 {a.specialPriceNote || 'Prix spécial'}</Text>
+                            )}
+                            {a.link ? (
+                              <TouchableOpacity onPress={() => Linking.openURL(a.link)}>
+                                <Text style={[ms.accomMeta, { color: Colors.parme }]}>🔗 Lien</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  <Text style={ms.label}>{editingAccomId ? 'Modifier le logement' : 'Ajouter un logement'}</Text>
+
+                  <TextInput style={ms.input} placeholder="Nom (ex: Hôtel Roma)" placeholderTextColor={Colors.textMuted}
+                    value={accomForm.name} onChangeText={(v) => setAccomForm(f => ({ ...f, name: v }))} />
+
+                  <View style={ms.pills}>
+                    {ACCOM_TYPES.map(t => (
+                      <TouchableOpacity key={t.value} style={[ms.pill, accomForm.type === t.value && ms.pillActive]}
+                        onPress={() => setAccomForm(f => ({ ...f, type: t.value }))}>
+                        <Text style={[ms.pillText, accomForm.type === t.value && ms.pillTextActive]}>{t.icon} {t.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <View style={ms.row}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={ms.label}>Arrivée (AAAA-MM-JJ)</Text>
+                      <TextInput style={ms.input} placeholder="2026-06-01" placeholderTextColor={Colors.textMuted}
+                        value={accomForm.checkIn} onChangeText={(v) => setAccomForm(f => ({ ...f, checkIn: v }))} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={ms.label}>Départ (AAAA-MM-JJ)</Text>
+                      <TextInput style={ms.input} placeholder="2026-06-03" placeholderTextColor={Colors.textMuted}
+                        value={accomForm.checkOut} onChangeText={(v) => setAccomForm(f => ({ ...f, checkOut: v }))} />
+                    </View>
+                  </View>
+
+                  <Text style={ms.label}>Prix (€, optionnel)</Text>
+                  <TextInput style={ms.input} placeholder="250" placeholderTextColor={Colors.textMuted}
+                    keyboardType="number-pad" value={accomForm.price} onChangeText={(v) => setAccomForm(f => ({ ...f, price: v }))} />
+
+                  <View style={ms.checkRow}>
+                    <Switch value={accomForm.hasSpecialPrice}
+                      onValueChange={(v) => setAccomForm(f => ({ ...f, hasSpecialPrice: v }))}
+                      thumbColor={accomForm.hasSpecialPrice ? Colors.parme : '#f4f4f4'} trackColor={{ true: Colors.orchidee }} />
+                    <Text style={ms.checkLabel}>Prix spécial (réduction CE, code promo...)</Text>
+                  </View>
+
+                  {accomForm.hasSpecialPrice && (
+                    <TextInput style={ms.input} placeholder="Ex: -20% code CE2026" placeholderTextColor={Colors.textMuted}
+                      value={accomForm.specialPriceNote} onChangeText={(v) => setAccomForm(f => ({ ...f, specialPriceNote: v }))} />
+                  )}
+
+                  <Text style={ms.label}>Lien (Airbnb, Booking...)</Text>
+                  <TextInput style={ms.input} placeholder="https://..." placeholderTextColor={Colors.textMuted}
+                    autoCapitalize="none" value={accomForm.link} onChangeText={(v) => setAccomForm(f => ({ ...f, link: v }))} />
+
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                    {editingAccomId && (
+                      <TouchableOpacity style={[ms.backBtn, { flex: 1 }]} onPress={resetAccomForm}>
+                        <Text style={ms.backBtnText}>Annuler</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity style={[ms.nextBtn, { flex: 1 }, savingAccom && { opacity: 0.6 }]}
+                      disabled={savingAccom} onPress={saveAccom}>
+                      <Text style={ms.nextBtnText}>
+                        {savingAccom ? 'Enregistrement...' : editingAccomId ? 'Mettre à jour' : '+ Ajouter le logement'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </>
+          )}
+
           {!!error && <View style={ms.errorBox}><Text style={ms.errorText}>{error}</Text></View>}
         </ScrollView>
 
@@ -405,7 +595,7 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
             <Text style={ms.backBtnText}>{step === 0 ? 'Annuler' : '← Retour'}</Text>
           </TouchableOpacity>
 
-          {step < 2 ? (
+          {step < 3 ? (
             <TouchableOpacity style={[ms.nextBtn, !canNext() && { opacity: 0.5 }]}
               disabled={!canNext()} onPress={() => setStep(p => p + 1)}>
               <Text style={ms.nextBtnText}>Suivant →</Text>
@@ -677,6 +867,19 @@ const ms = StyleSheet.create({
 
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
   checkLabel: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.text, flex: 1 },
+
+  accomCard: {
+    borderWidth: 1, borderColor: Colors.border, borderRadius: 14,
+    padding: 12, backgroundColor: '#fcf9f1',
+  },
+  accomHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  accomName: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: Colors.text, flex: 1, marginRight: 8 },
+  accomDates: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.text },
+  accomMeta: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.text },
+  accomBadge: {
+    fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 11, color: Colors.parme,
+    backgroundColor: Colors.parmeLight ?? '#f5eef8', borderRadius: 100, paddingHorizontal: 8, paddingVertical: 2,
+  },
 
   errorBox: { backgroundColor: '#fef2f2', borderRadius: 10, padding: 12, marginTop: 8 },
   errorText: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.error },
