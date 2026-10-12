@@ -13,7 +13,6 @@ function timeAgo(iso) {
   return `il y a ${Math.floor(h / 24)}j`;
 }
 
-const TYPE_COLOR = { like: '#ef4444', comment: '#4f203f' };
 const TYPE_ICON  = { like: '❤️', comment: '💬' };
 
 export default function Navbar() {
@@ -29,7 +28,7 @@ export default function Navbar() {
     try {
       const { data } = await api.get('/api/notifications');
       setNotifs(data);
-    } catch {}
+    } catch { /* notifications indisponibles : on réessaie au prochain polling */ }
   }, [user]);
 
   // Chargement initial + polling toutes les 30s
