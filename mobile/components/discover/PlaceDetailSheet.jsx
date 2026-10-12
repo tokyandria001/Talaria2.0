@@ -1,0 +1,205 @@
+import { useState, useEffect } from 'react';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import BottomSheet, { Chip, SheetLabel } from '../BottomSheet';
+import { comingSoon } from '../AuthUI';
+import client from '../../api/client';
+import { Colors } from '../../constants/Colors';
+import { categoryOf, priceLevel, distanceMeters, fmtDistance } from '../../constants/PlaceCategories';
+
+const SLOTS = [
+  { value: 'matin', label: 'Matin' }, { value: 'midi', label: 'Midi' },
+  { value: 'apres-midi', label: 'Après-midi' }, { value: 'soir', label: 'Soir' },
+];
+
+const photoUrl = (path) => (path?.startsWith('/') ? `${client.defaults.baseURL}${path}` : path);
+const fmtDay = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: 'short' });
+
+function tripDays(start, end) {
+  const days = [];
+  const d = new Date(`${start}T00:00:00Z`);
+  const last = new Date(`${end}T00:00:00Z`);
+  while (d <= last && days.length < 60) { days.push(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() + 1); }
+  return days;
+}
+
+export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike }) {
+  const [step,    setStep]    = useState('detail'); // detail | trip
+  const [trips,   setTrips]   = useState(null);
+  const [trip,    setTrip]    = useState(null);
+  const [day,     setDay]     = useState(null);
+  const [slot,    setSlot]    = useState('midi');
+  const [saving,  setSaving]  = useState(false);
+
+  useEffect(() => { if (place) { setStep('detail'); setTrip(null); setDay(null); } }, [place]);
+
+  const openTripPicker = async () => {
+    setStep('trip');
+    if (trips) return;
+    try {
+      const { data } = await client.get('/api/trips');
+      setTrips(data.filter(t => t.endDate >= new Date().toISOString().slice(0, 10)));
+    } catch { setTrips([]); }
+  };
+
+  const addToTrip = async () => {
+    setSaving(true);
+    try {
+      await client.post(`/api/trips/${trip.id}/activities`, {
+        date: day, slot,
+        title: place.name,
+        placeId: place.id,
+        category: categoryOf(place).value || null,
+        description: place.description || null,
+      });
+      Alert.alert('Ajouté au voyage', `${place.name} est dans le planning de ${trip.destination}.`);
+      onClose();
+    } catch (err) {
+      Alert.alert('Erreur', err.response?.data?.message || "Impossible d'ajouter le lieu au voyage.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!place) return null;
+  const cat = categoryOf(place);
+  const level = priceLevel(place.averagePrice);
+  const distance = userLoc ? distanceMeters(userLoc, place) : null;
+  const photo = place.photos?.[0];
+
+  return (
+    <BottomSheet visible={!!place} title={step === 'detail' ? place.name : 'Ajouter au voyage'} onClose={onClose}>
+      {step === 'detail' ? (
+        <>
+          {photo ? (
+            <Image source={{ uri: photoUrl(photo) }} style={s.photo} resizeMode="cover" />
+          ) : (
+            <View style={[s.photo, s.photoEmpty, { backgroundColor: cat.color }]}>
+              <Ionicons name={cat.icon} size={48} color="rgba(255,255,255,0.9)" />
+            </View>
+          )}
+
+          <View style={s.badges}>
+            <Text style={s.badge}>{cat.label}</Text>
+            {level && <Text style={s.badge}>{level}</Text>}
+            <TouchableOpacity style={s.likes} onPress={() => onToggleLike(place)} hitSlop={8}>
+              <Ionicons name={place.liked ? 'heart' : 'heart-outline'} size={15} color={place.liked ? '#e5484d' : Colors.text} />
+              <Text style={s.likesText}>{place.likesCount ?? 0}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {place.description ? <Text style={s.desc}>{place.description}</Text> : null}
+
+          <View style={s.infos}>
+            {(place.address || distance != null) && (
+              <InfoRow icon="location-outline">
+                {[place.address, distance != null ? fmtDistance(distance) : null].filter(Boolean).join(' · ')}
+              </InfoRow>
+            )}
+            {place.averagePrice != null && (
+              <InfoRow icon="cash-outline">Prix moyen : {place.averagePrice} € par personne</InfoRow>
+            )}
+          </View>
+
+          <View style={s.actions}>
+            <TouchableOpacity style={s.outlineBtn} onPress={() => comingSoon('Le vote en groupe')}>
+              <Ionicons name="thumbs-up-outline" size={16} color={Colors.parme} />
+              <Text style={s.outlineText}>Proposer au vote</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.primaryBtn} onPress={openTripPicker}>
+              <Ionicons name="add" size={18} color={Colors.white} />
+              <Text style={s.primaryText}>Ajouter au voyage</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <>
+          <TouchableOpacity onPress={() => setStep('detail')} style={s.backLink}>
+            <Ionicons name="chevron-back" size={16} color={Colors.parme} />
+            <Text style={s.backLinkText}>{place.name}</Text>
+          </TouchableOpacity>
+
+          <SheetLabel style={{ marginTop: 4 }}>Voyage</SheetLabel>
+          {trips === null ? (
+            <ActivityIndicator color={Colors.parme} style={{ alignSelf: 'flex-start' }} />
+          ) : trips.length === 0 ? (
+            <Text style={s.empty}>Aucun voyage à venir. Créez un voyage avec le bouton + pour y ajouter des lieux.</Text>
+          ) : (
+            <View style={s.chips}>
+              {trips.map(t => (
+                <Chip key={t.id} label={t.title || t.destination} active={trip?.id === t.id}
+                  onPress={() => { setTrip(t); setDay(t.startDate); }} />
+              ))}
+            </View>
+          )}
+
+          {trip && (
+            <>
+              <SheetLabel>Jour</SheetLabel>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {tripDays(trip.startDate, trip.endDate).map((d, i) => (
+                  <Chip key={d} label={`J${i + 1} · ${fmtDay(d)}`} active={day === d} onPress={() => setDay(d)} />
+                ))}
+              </ScrollView>
+
+              <SheetLabel>Créneau</SheetLabel>
+              <View style={s.chips}>
+                {SLOTS.map(sl => <Chip key={sl.value} label={sl.label} active={slot === sl.value} onPress={() => setSlot(sl.value)} />)}
+              </View>
+
+              <TouchableOpacity style={[s.primaryBtn, s.fullBtn, saving && { opacity: 0.6 }]} onPress={addToTrip} disabled={saving}>
+                <Text style={s.primaryText}>{saving ? 'Ajout...' : 'Ajouter au planning'}</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </>
+      )}
+    </BottomSheet>
+  );
+}
+
+function InfoRow({ icon, children }) {
+  return (
+    <View style={s.infoRow}>
+      <Ionicons name={icon} size={16} color={Colors.text} />
+      <Text style={s.infoText}>{children}</Text>
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  photo:      { width: '100%', height: 170, borderRadius: 16, marginTop: 4 },
+  photoEmpty: { alignItems: 'center', justifyContent: 'center' },
+
+  badges: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
+  badge: {
+    fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.text,
+    backgroundColor: '#ece3e7', borderRadius: 100, paddingHorizontal: 10, paddingVertical: 4, overflow: 'hidden',
+  },
+  likes:     { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 4 },
+  likesText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.text },
+
+  desc: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14, lineHeight: 20, color: Colors.textMuted, marginTop: 12 },
+
+  infos:    { gap: 8, marginTop: 14 },
+  infoRow:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  infoText: { flex: 1, fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.text },
+
+  actions: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  outlineBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderWidth: 1.5, borderColor: Colors.parme, borderRadius: 100, paddingVertical: 13,
+  },
+  outlineText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.parme },
+  primaryBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: Colors.parme, borderRadius: 100, paddingVertical: 13,
+  },
+  primaryText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.white },
+  fullBtn:     { flex: 0, marginTop: 22 },
+
+  backLink:     { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  backLinkText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.parme },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  empty: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted },
+});

@@ -5,7 +5,7 @@ import {
   Modal, Alert, Switch, Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import client from '../../api/client';
@@ -681,6 +681,12 @@ export default function TripsScreen() {
   };
 
   const openCreate = () => { setEditTrip(null); setShowModal(true); };
+
+  // « Créer un voyage » depuis le bouton + : ouvre le formulaire puis retire le paramètre
+  const { action } = useLocalSearchParams();
+  useEffect(() => {
+    if (action === 'create') { openCreate(); router.setParams({ action: undefined }); }
+  }, [action, router]);
 
   return (
     <SafeAreaView style={[s.root, { backgroundColor: theme.sableLune }]} edges={['top']}>

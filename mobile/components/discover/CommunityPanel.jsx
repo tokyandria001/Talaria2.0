@@ -9,7 +9,6 @@ import client from '../../api/client';
 import ArticleCard from '../../components/ArticleCard';
 import ArticleDetailModal from '../../components/ArticleDetailModal';
 import WriteArticleModal from '../../components/WriteArticleModal';
-import TalariaLogo from '../../components/TalariaLogo';
 import { Colors } from '../../constants/Colors';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -22,7 +21,7 @@ const CATEGORIES = [
   { value: 'Conseils',     label: '💡 Conseils' },
 ];
 
-export default function CommunityScreen() {
+export default function CommunityPanel({ header, autoWrite, onAutoWriteHandled }) {
   const { user }   = useAuth();
   const { theme }  = useTheme();
   const insets      = useSafeAreaInsets();
@@ -81,6 +80,11 @@ export default function CommunityScreen() {
     setShowWrite(true);
   };
 
+  // Ouverture de la rédaction depuis le bouton +
+  useEffect(() => {
+    if (autoWrite) { setEditArticle(null); setShowWrite(true); onAutoWriteHandled?.(); }
+  }, [autoWrite, onAutoWriteHandled]);
+
   const initials = user
     ? (((user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')) || (user.email?.[0] ?? '?')).toUpperCase()
     : '?';
@@ -88,10 +92,8 @@ export default function CommunityScreen() {
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.sableLune }]} edges={['top']}>
 
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.white, borderBottomColor: theme.border }]}>
-        <TalariaLogo height={28} />
-      </View>
+      {/* En-tête Découvrir (Carte / Communauté) */}
+      {header}
 
       <View style={styles.titleRow}>
         <View>

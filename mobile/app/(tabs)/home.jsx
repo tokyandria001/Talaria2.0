@@ -34,10 +34,10 @@ function greeting(firstName) {
 }
 
 const QUICK_ACTIONS = [
-  { key: 'map',       label: 'Carte',       sub: 'Explorez des lieux',       icon: 'map',            bg: '#1a1a2e', iconColor: '#c9b2d7' },
-  { key: 'community', label: 'Communauté',  sub: 'Articles & conseils',      icon: 'people',         bg: '#4f203f', iconColor: '#f5eef8' },
-  { key: 'trips',     label: 'Voyages',     sub: 'Planifier & budgéter',     icon: 'airplane',       bg: '#2d1b4e', iconColor: '#c9b2d7' },
-  { key: 'profile',   label: 'Mon profil',  sub: 'Paramètres & préférences', icon: 'person-circle',  bg: '#3a1830', iconColor: '#f0dacb' },
+  { key: 'map',       href: { pathname: '/(tabs)/discover', params: { view: 'map' } },       label: 'Carte',       sub: 'Explorez des lieux',       icon: 'map',            bg: '#1a1a2e', iconColor: '#c9b2d7' },
+  { key: 'community', href: { pathname: '/(tabs)/discover', params: { view: 'community' } }, label: 'Communauté',  sub: 'Articles & conseils',      icon: 'people',         bg: '#4f203f', iconColor: '#f5eef8' },
+  { key: 'trips',     href: '/(tabs)/trips',   label: 'Voyages',     sub: 'Planifier & budgéter',     icon: 'airplane',       bg: '#2d1b4e', iconColor: '#c9b2d7' },
+  { key: 'profile',   href: '/(tabs)/profile', label: 'Mon profil',  sub: 'Paramètres & préférences', icon: 'person-circle',  bg: '#3a1830', iconColor: '#f0dacb' },
 ];
 
 const INSPIRATIONS = [
@@ -148,7 +148,7 @@ export default function HomeScreen() {
                 key={a.key}
                 style={[s.actionCard, { backgroundColor: a.bg }]}
                 activeOpacity={0.82}
-                onPress={() => router.push(`/(tabs)/${a.key}`)}
+                onPress={() => router.navigate(a.href)}
               >
                 <View style={[s.actionIconWrap, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
                   <Ionicons name={a.icon} size={26} color={a.iconColor} />
