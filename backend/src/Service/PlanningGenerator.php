@@ -23,7 +23,7 @@ class PlanningGenerator
     private const MAX_DAYS = 60;
 
     /** Tags de lieux adaptés à une activité du matin / à un déjeuner */
-    private const MORNING_TAGS = ['visite', 'culture', 'plage', 'sport'];
+    private const MORNING_TAGS = ['visite', 'culture', 'musee', 'plage', 'sport', 'activite', 'nature'];
     private const LUNCH_TAGS   = ['restaurant'];
 
     /** Activités génériques (sans lieu) quand la carte n'a rien à proposer, par centre d'intérêt */

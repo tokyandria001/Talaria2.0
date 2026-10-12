@@ -22,11 +22,15 @@ class Activity
         'culture'    => 12,
         'sport'      => 30,
         'plage'      => 0,
+        'musee'      => 12,
+        'activite'   => 30,
+        'marche'     => 15,
+        'nature'     => 0,
     ];
 
     public static function defaultPriceFor(?string $category): ?int
     {
-        return self::DEFAULT_PRICES[$category] ?? null;
+        return $category === null ? null : (self::DEFAULT_PRICES[$category] ?? null);
     }
 
     #[ORM\Id]
@@ -53,9 +57,11 @@ class Activity
 
     #[ORM\Column(length: 200)]
     #[Assert\NotBlank(message: 'Le titre de l\'activité est requis.')]
+    #[Assert\Length(max: 200)]
     private string $title;
 
     #[ORM\Column(type: 'text', nullable: true)]
+    #[Assert\Length(max: 2000)]
     private ?string $description = null;
 
     /** Tag principal (visite, restaurant, bar, plage...) */
@@ -71,6 +77,7 @@ class Activity
     private bool $hasSpecialPrice = false;
 
     #[ORM\Column(length: 255, nullable: true)]
+    #[Assert\Length(max: 255)]
     private ?string $specialPriceNote = null;
 
     /** true si générée par le remplissage automatique (et pas encore modifiée) */

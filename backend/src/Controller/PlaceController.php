@@ -16,6 +16,8 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[Route('/api/places', name: 'place_')]
 class PlaceController extends AbstractController
 {
+    use ApiInputTrait;
+
     #[Route('', name: 'list', methods: ['GET'])]
     public function list(Request $request, PlaceRepository $repo, EntityManagerInterface $em): JsonResponse
     {
@@ -97,24 +99,22 @@ class PlaceController extends AbstractController
         if (empty($data['name']) || !isset($data['latitude'], $data['longitude'])) {
             return $this->json(['message' => 'Nom, latitude et longitude requis.'], 400);
         }
+        if (!is_numeric($data['latitude']) || !is_numeric($data['longitude'])) {
+            return $this->json(['message' => 'Coordonnées GPS invalides.'], 400);
+        }
 
         $place = new Place();
-        $place->setName($data['name'])
-              ->setDescription($data['description'] ?? null)
-              ->setTags($data['tags'] ?? [])
-              ->setAveragePrice(isset($data['averagePrice']) ? (int) $data['averagePrice'] : null)
+        $place->setName(trim((string) $data['name']))
+              ->setDescription(!empty($data['description']) ? trim((string) $data['description']) : null)
+              ->setTags(is_array($data['tags'] ?? null) ? array_values($data['tags']) : [])
+              ->setAveragePrice($this->parseInt($data['averagePrice'] ?? null, 'prix moyen'))
+              ->setAddress(!empty($data['address']) ? trim((string) $data['address']) : null)
               ->setLatitude((float) $data['latitude'])
               ->setLongitude((float) $data['longitude'])
               ->setCreatedBy($this->getUser());
 
         $errors = $validator->validate($place);
-        if (count($errors) > 0) {
-            $messages = [];
-            foreach ($errors as $e) {
-                $messages[$e->getPropertyPath()] = $e->getMessage();
-            }
-            return $this->json(['message' => 'Données invalides.', 'errors' => $messages], 422);
-        }
+        if (count($errors) > 0) return $this->validationError($errors);
 
         $em->persist($place);
         $em->flush();
@@ -144,6 +144,7 @@ class PlaceController extends AbstractController
             'description'  => $place->getDescription(),
             'tags'         => $place->getTags(),
             'averagePrice' => $place->getAveragePrice(),
+            'address'      => $place->getAddress(),
             'latitude'     => $place->getLatitude(),
             'longitude'    => $place->getLongitude(),
             'photos'       => $place->getPhotos(),

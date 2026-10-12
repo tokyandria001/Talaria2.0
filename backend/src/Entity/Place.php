@@ -21,19 +21,29 @@ class Place
     private string $name;
 
     #[ORM\Column(type: 'text', nullable: true)]
+    #[Assert\Length(max: 2000)]
     private ?string $description = null;
 
     /** restaurant | bar | hotel | visite | plage | sport | culture */
     #[ORM\Column(type: 'json')]
+    #[Assert\Count(max: 10, maxMessage: '10 catégories maximum.')]
+    #[Assert\All([new Assert\Type('string'), new Assert\Length(max: 30)])]
     private array $tags = [];
 
     #[ORM\Column(nullable: true)]
+    #[Assert\PositiveOrZero(message: 'Le prix moyen ne peut pas être négatif.')]
     private ?int $averagePrice = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Assert\Length(max: 255)]
+    private ?string $address = null;
+
     #[ORM\Column]
+    #[Assert\Range(min: -90, max: 90, notInRangeMessage: 'Latitude invalide.')]
     private float $latitude;
 
     #[ORM\Column]
+    #[Assert\Range(min: -180, max: 180, notInRangeMessage: 'Longitude invalide.')]
     private float $longitude;
 
     #[ORM\Column(type: 'json')]
@@ -68,6 +78,9 @@ class Place
 
     public function getAveragePrice(): ?int { return $this->averagePrice; }
     public function setAveragePrice(?int $averagePrice): static { $this->averagePrice = $averagePrice; return $this; }
+
+    public function getAddress(): ?string { return $this->address; }
+    public function setAddress(?string $address): static { $this->address = $address; return $this; }
 
     public function getLatitude(): float { return $this->latitude; }
     public function setLatitude(float $latitude): static { $this->latitude = $latitude; return $this; }

@@ -9,10 +9,13 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route('/api/trips', name: 'api_trips_')]
 class TripController extends AbstractController
 {
+    use ApiInputTrait;
+
     public function __construct(private EntityManagerInterface $em) {}
 
     /* ── List (mine) ──────────────────────────── */
@@ -31,7 +34,7 @@ class TripController extends AbstractController
 
     /* ── Create ───────────────────────────────── */
     #[Route('', methods: ['POST'])]
-    public function create(Request $req): JsonResponse
+    public function create(Request $req, ValidatorInterface $validator): JsonResponse
     {
         /** @var User $me */
         $me   = $this->getUser();
@@ -42,25 +45,11 @@ class TripController extends AbstractController
             return $this->json(['message' => 'Champs obligatoires manquants.'], 400);
         }
 
-        $trip = (new Trip())
-            ->setUser($me)
-            ->setDestination($data['destination'])
-            ->setDepartureCity($data['departureCity'])
-            ->setStartDate(new \DateTimeImmutable($data['startDate']))
-            ->setEndDate(new \DateTimeImmutable($data['endDate']))
-            ->setTravelers((int) ($data['travelers'] ?? 1))
-            ->setTransportMode($data['transportMode'] ?? 'avion')
-            ->setNeedsRental((bool) ($data['needsRental'] ?? false));
+        $trip = (new Trip())->setUser($me);
+        $this->apply($trip, $data);
 
-        if (!empty($data['title']))         $trip->setTitle($data['title']);
-        if (isset($data['budget']))         $trip->setBudget((int) $data['budget']);
-        if (isset($data['distanceKm']))     $trip->setDistanceKm((int) $data['distanceKm']);
-        if (isset($data['fuelPricePerLiter'])) $trip->setFuelPricePerLiter((string) $data['fuelPricePerLiter']);
-        if (isset($data['fuelConsumption']))   $trip->setFuelConsumption((string) $data['fuelConsumption']);
-        if (isset($data['tollCost']))       $trip->setTollCost((int) $data['tollCost']);
-        if (isset($data['rentalLink']))     $trip->setRentalLink($data['rentalLink']);
-        if (isset($data['rentalCost']))     $trip->setRentalCost((int) $data['rentalCost']);
-        if (isset($data['bookingLinks']))   $trip->setBookingLinks($data['bookingLinks']);
+        $errors = $validator->validate($trip);
+        if (count($errors) > 0) return $this->validationError($errors);
 
         $this->em->persist($trip);
         $this->em->flush();
@@ -80,29 +69,18 @@ class TripController extends AbstractController
 
     /* ── Update ───────────────────────────────── */
     #[Route('/{id}', methods: ['PATCH'])]
-    public function update(int $id, Request $req): JsonResponse
+    public function update(int $id, Request $req, ValidatorInterface $validator): JsonResponse
     {
         $trip = $this->findOwned($id);
         if (!$trip) return $this->json(['message' => 'Voyage introuvable.'], 404);
 
-        $data = json_decode($req->getContent(), true) ?? [];
+        $this->apply($trip, json_decode($req->getContent(), true) ?? []);
 
-        if (array_key_exists('title', $data))          $trip->setTitle($data['title']);
-        if (array_key_exists('destination', $data))    $trip->setDestination($data['destination']);
-        if (array_key_exists('departureCity', $data))  $trip->setDepartureCity($data['departureCity']);
-        if (array_key_exists('startDate', $data))      $trip->setStartDate(new \DateTimeImmutable($data['startDate']));
-        if (array_key_exists('endDate', $data))        $trip->setEndDate(new \DateTimeImmutable($data['endDate']));
-        if (array_key_exists('travelers', $data))      $trip->setTravelers((int) $data['travelers']);
-        if (array_key_exists('budget', $data))         $trip->setBudget($data['budget'] !== null ? (int) $data['budget'] : null);
-        if (array_key_exists('transportMode', $data))  $trip->setTransportMode($data['transportMode']);
-        if (array_key_exists('distanceKm', $data))     $trip->setDistanceKm($data['distanceKm'] !== null ? (int) $data['distanceKm'] : null);
-        if (array_key_exists('fuelPricePerLiter', $data)) $trip->setFuelPricePerLiter($data['fuelPricePerLiter'] !== null ? (string) $data['fuelPricePerLiter'] : null);
-        if (array_key_exists('fuelConsumption', $data))   $trip->setFuelConsumption($data['fuelConsumption'] !== null ? (string) $data['fuelConsumption'] : null);
-        if (array_key_exists('tollCost', $data))       $trip->setTollCost($data['tollCost'] !== null ? (int) $data['tollCost'] : null);
-        if (array_key_exists('needsRental', $data))    $trip->setNeedsRental((bool) $data['needsRental']);
-        if (array_key_exists('rentalLink', $data))     $trip->setRentalLink($data['rentalLink']);
-        if (array_key_exists('rentalCost', $data))     $trip->setRentalCost($data['rentalCost'] !== null ? (int) $data['rentalCost'] : null);
-        if (array_key_exists('bookingLinks', $data))   $trip->setBookingLinks($data['bookingLinks']);
+        $errors = $validator->validate($trip);
+        if (count($errors) > 0) {
+            $this->em->refresh($trip); // annule les modifications invalides
+            return $this->validationError($errors);
+        }
 
         $this->em->flush();
 
@@ -123,6 +101,29 @@ class TripController extends AbstractController
     }
 
     /* ── Helpers ──────────────────────────────── */
+
+    /** Applique les champs présents dans $data (valeurs mal formées → 400) */
+    private function apply(Trip $trip, array $data): void
+    {
+        $text = fn(string $k) => isset($data[$k]) && $data[$k] !== '' ? trim((string) $data[$k]) : null;
+
+        if (array_key_exists('title', $data))             $trip->setTitle($text('title'));
+        if (array_key_exists('destination', $data))       $trip->setDestination((string) $text('destination'));
+        if (array_key_exists('departureCity', $data))     $trip->setDepartureCity((string) $text('departureCity'));
+        if (array_key_exists('startDate', $data))         $trip->setStartDate($this->parseDate($data['startDate'], 'date de départ'));
+        if (array_key_exists('endDate', $data))           $trip->setEndDate($this->parseDate($data['endDate'], 'date de retour'));
+        if (array_key_exists('travelers', $data))         $trip->setTravelers($this->parseInt($data['travelers'], 'nombre de voyageurs') ?? 1);
+        if (array_key_exists('budget', $data))            $trip->setBudget($this->parseInt($data['budget'], 'budget'));
+        if (array_key_exists('transportMode', $data))     $trip->setTransportMode((string) $data['transportMode']);
+        if (array_key_exists('distanceKm', $data))        $trip->setDistanceKm($this->parseInt($data['distanceKm'], 'distance'));
+        if (array_key_exists('fuelPricePerLiter', $data)) $trip->setFuelPricePerLiter($this->parseDecimal($data['fuelPricePerLiter'], 'prix du carburant'));
+        if (array_key_exists('fuelConsumption', $data))   $trip->setFuelConsumption($this->parseDecimal($data['fuelConsumption'], 'consommation'));
+        if (array_key_exists('tollCost', $data))          $trip->setTollCost($this->parseInt($data['tollCost'], 'péages'));
+        if (array_key_exists('needsRental', $data))       $trip->setNeedsRental((bool) $data['needsRental']);
+        if (array_key_exists('rentalLink', $data))        $trip->setRentalLink($text('rentalLink'));
+        if (array_key_exists('rentalCost', $data))        $trip->setRentalCost($this->parseInt($data['rentalCost'], 'coût de location'));
+        if (array_key_exists('bookingLinks', $data))      $trip->setBookingLinks(is_array($data['bookingLinks']) ? array_values($data['bookingLinks']) : []);
+    }
 
     private function findOwned(int $id): ?Trip
     {

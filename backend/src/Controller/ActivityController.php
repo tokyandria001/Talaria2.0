@@ -17,6 +17,8 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[Route('/api/trips/{tripId}/activities', name: 'api_activities_')]
 class ActivityController extends AbstractController
 {
+    use ApiInputTrait;
+
     public function __construct(private EntityManagerInterface $em) {}
 
     /* ── List (planning) ──────────────────────── */
@@ -122,11 +124,7 @@ class ActivityController extends AbstractController
     private function apply(Activity $a, array $data): ?JsonResponse
     {
         if (array_key_exists('date', $data)) {
-            try {
-                $date = (new \DateTimeImmutable($data['date']))->setTime(0, 0);
-            } catch (\Exception) {
-                return $this->json(['message' => 'Date invalide.'], 400);
-            }
+            $date = $this->parseDate($data['date'], 'date');
             $trip = $a->getTrip();
             if ($date < $trip->getStartDate() || $date > $trip->getEndDate()) {
                 return $this->json(['message' => 'La date doit être comprise dans les dates du voyage.'], 400);
@@ -135,8 +133,9 @@ class ActivityController extends AbstractController
         }
 
         if (array_key_exists('placeId', $data)) {
-            $place = $data['placeId'] ? $this->em->find(Place::class, (int) $data['placeId']) : null;
-            if ($data['placeId'] && !$place) return $this->json(['message' => 'Lieu introuvable.'], 404);
+            $placeId = $this->parseInt($data['placeId'], 'lieu');
+            $place = $placeId ? $this->em->find(Place::class, $placeId) : null;
+            if ($placeId && !$place) return $this->json(['message' => 'Lieu introuvable.'], 404);
             $a->setPlace($place);
         }
 
@@ -144,20 +143,11 @@ class ActivityController extends AbstractController
         if (array_key_exists('title', $data))            $a->setTitle(trim((string) $data['title']));
         if (array_key_exists('description', $data))      $a->setDescription($data['description'] ?: null);
         if (array_key_exists('category', $data))         $a->setCategory($data['category'] ?: null);
-        if (array_key_exists('price', $data))            $a->setPrice($data['price'] !== null && $data['price'] !== '' ? (int) $data['price'] : null);
+        if (array_key_exists('price', $data))            $a->setPrice($this->parseInt($data['price'], 'prix'));
         if (array_key_exists('hasSpecialPrice', $data))  $a->setHasSpecialPrice((bool) $data['hasSpecialPrice']);
         if (array_key_exists('specialPriceNote', $data)) $a->setSpecialPriceNote($data['specialPriceNote'] ?: null);
 
         return null;
-    }
-
-    private function validationError(iterable $errors): JsonResponse
-    {
-        $messages = [];
-        foreach ($errors as $e) {
-            $messages[$e->getPropertyPath()] = $e->getMessage();
-        }
-        return $this->json(['message' => 'Données invalides.', 'errors' => $messages], 422);
     }
 
     /** Activités du voyage triées par date puis créneau. */

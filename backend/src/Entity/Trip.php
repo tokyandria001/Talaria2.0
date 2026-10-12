@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'trip')]
@@ -16,14 +17,17 @@ class Trip
     private int $id;
 
     #[ORM\Column(length: 255, nullable: true)]
+    #[Assert\Length(max: 255)]
     private ?string $title = null;
 
     #[ORM\Column(length: 255)]
     #[Assert\NotBlank(message: 'La destination est requise.')]
+    #[Assert\Length(max: 255)]
     private string $destination;
 
     #[ORM\Column(length: 255)]
     #[Assert\NotBlank(message: 'La ville de départ est requise.')]
+    #[Assert\Length(max: 255)]
     private string $departureCity;
 
     #[ORM\Column(type: 'date_immutable')]
@@ -35,26 +39,32 @@ class Trip
     private \DateTimeImmutable $endDate;
 
     #[ORM\Column(options: ['default' => 1])]
+    #[Assert\Range(min: 1, max: 50, notInRangeMessage: 'Le nombre de voyageurs doit être compris entre {{ min }} et {{ max }}.')]
     private int $travelers = 1;
 
     #[ORM\Column(nullable: true)]
+    #[Assert\PositiveOrZero(message: 'Le budget ne peut pas être négatif.')]
     private ?int $budget = null;
 
     #[ORM\Column(length: 20)]
-    #[Assert\Choice(choices: ['voiture', 'avion', 'train', 'bus'])]
+    #[Assert\Choice(choices: ['voiture', 'avion', 'train', 'bus'], message: 'Moyen de transport invalide.')]
     private string $transportMode = 'avion';
 
     // --- Voiture ---
     #[ORM\Column(nullable: true)]
+    #[Assert\PositiveOrZero(message: 'La distance ne peut pas être négative.')]
     private ?int $distanceKm = null;
 
     #[ORM\Column(type: 'decimal', precision: 5, scale: 3, nullable: true)]
+    #[Assert\Range(min: 0, max: 99, notInRangeMessage: 'Le prix du carburant doit être compris entre {{ min }} et {{ max }} €/L.')]
     private ?string $fuelPricePerLiter = null;
 
     #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    #[Assert\Range(min: 0, max: 99, notInRangeMessage: 'La consommation doit être comprise entre {{ min }} et {{ max }} L/100 km.')]
     private ?string $fuelConsumption = null;
 
     #[ORM\Column(nullable: true)]
+    #[Assert\PositiveOrZero(message: 'Les péages ne peuvent pas être négatifs.')]
     private ?int $tollCost = null;
 
     // --- Location sur place ---
@@ -62,9 +72,12 @@ class Trip
     private bool $needsRental = false;
 
     #[ORM\Column(length: 500, nullable: true)]
+    #[Assert\Length(max: 500)]
+    #[Assert\Url(protocols: ['http', 'https'], requireTld: true, message: 'Le lien du loueur doit être une adresse web valide (https://...).')]
     private ?string $rentalLink = null;
 
     #[ORM\Column(nullable: true)]
+    #[Assert\PositiveOrZero(message: 'Le coût de location ne peut pas être négatif.')]
     private ?int $rentalCost = null;
 
     // --- Liens réservation (JSON : [{type, url, label}]) ---
@@ -144,6 +157,38 @@ class Trip
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
+
+    #[Assert\Callback]
+    public function validateConsistency(ExecutionContextInterface $context): void
+    {
+        if (isset($this->startDate, $this->endDate) && $this->endDate < $this->startDate) {
+            $context->buildViolation('La date de retour doit être après la date de départ.')
+                ->atPath('endDate')->addViolation();
+        } elseif (isset($this->startDate, $this->endDate) && $this->startDate->diff($this->endDate)->days > 365) {
+            $context->buildViolation('Un voyage ne peut pas durer plus d\'un an.')
+                ->atPath('endDate')->addViolation();
+        }
+
+        if (count($this->bookingLinks) > 20) {
+            $context->buildViolation('20 liens de réservation maximum.')->atPath('bookingLinks')->addViolation();
+            return;
+        }
+        foreach ($this->bookingLinks as $i => $link) {
+            $url = is_array($link) ? ($link['url'] ?? null) : null;
+            if (!self::isWebUrl($url)) {
+                $context->buildViolation('Chaque lien de réservation doit être une adresse web valide (https://...).')
+                    ->atPath("bookingLinks[$i]")->addViolation();
+            }
+        }
+    }
+
+    /** Lien http(s) uniquement (bloque javascript:, data:, etc.) */
+    public static function isWebUrl(mixed $url): bool
+    {
+        return is_string($url) && strlen($url) <= 500
+            && filter_var($url, FILTER_VALIDATE_URL) !== false
+            && in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true);
+    }
 
     /** Coût essence calculé (A/R) en euros, arrondi */
     public function computedFuelCost(): ?int

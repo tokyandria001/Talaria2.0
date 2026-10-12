@@ -8,6 +8,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -20,7 +21,19 @@ class AuthController extends AbstractController
         UserPasswordHasherInterface $hasher,
         EntityManagerInterface $em,
         ValidatorInterface $validator,
+        RateLimiterFactory $registrationLimiter,
     ): JsonResponse {
+        // Anti-création de comptes en masse : 5 inscriptions par heure et par IP
+        $limit = $registrationLimiter->create($request->getClientIp() ?? 'unknown')->consume();
+        if (!$limit->isAccepted()) {
+            $minutes = max(1, (int) ceil(($limit->getRetryAfter()->getTimestamp() - time()) / 60));
+            return $this->json(
+                ['message' => sprintf('Trop d\'inscriptions depuis cette adresse. Réessayez dans %d minute%s.', $minutes, $minutes > 1 ? 's' : '')],
+                429,
+                ['Retry-After' => (string) ($minutes * 60)],
+            );
+        }
+
         $data = json_decode($request->getContent(), true);
 
         if (!isset($data['email'], $data['password'])) {

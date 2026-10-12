@@ -1,0 +1,7 @@
+framework:
+    rate_limiter:
+        # Inscriptions : 5 comptes par heure et par adresse IP
+        registration:
+            policy: sliding_window
+            limit: 5
+            interval: '1 hour'

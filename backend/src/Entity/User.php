@@ -49,7 +49,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     /** Budget moyen par voyage (en euros) */
     #[ORM\Column(nullable: true)]
-    #[Assert\PositiveOrZero]
+    #[Assert\PositiveOrZero(message: 'Le budget moyen ne peut pas être négatif.')]
     private ?int $averageBudget = null;
 
     /** Tags d'activités préférées: ["culture","nature","nightlife","sport","gastronomie","aventure"] */

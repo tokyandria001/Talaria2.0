@@ -19,6 +19,8 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[Route('/api/profile', name: 'profile_')]
 class ProfileController extends AbstractController
 {
+    use ApiInputTrait;
+
     public function __construct(private EntityManagerInterface $em) {}
 
     #[Route('', name: 'get', methods: ['GET'])]
@@ -47,7 +49,7 @@ class ProfileController extends AbstractController
         if (isset($data['firstName'])) $user->setFirstName($data['firstName']);
         if (isset($data['lastName'])) $user->setLastName($data['lastName']);
         if (array_key_exists('username', $data)) $user->setPseudo($data['username'] ?: null);
-        if (array_key_exists('averageBudget', $data)) $user->setAverageBudget($data['averageBudget']);
+        if (array_key_exists('averageBudget', $data)) $user->setAverageBudget($this->parseInt($data['averageBudget'], 'budget moyen'));
         if (isset($data['activityTags']) && is_array($data['activityTags'])) $user->setActivityTags($data['activityTags']);
         if (isset($data['travelStyle'])) $user->setTravelStyle($data['travelStyle']);
         if (isset($data['travelPace'])) $user->setTravelPace($data['travelPace']);
@@ -55,13 +57,7 @@ class ProfileController extends AbstractController
         if (isset($data['interests']) && is_array($data['interests'])) $user->setInterests($data['interests']);
 
         $errors = $validator->validate($user);
-        if (count($errors) > 0) {
-            $messages = [];
-            foreach ($errors as $error) {
-                $messages[$error->getPropertyPath()] = $error->getMessage();
-            }
-            return $this->json(['message' => 'Données invalides.', 'errors' => $messages], 422);
-        }
+        if (count($errors) > 0) return $this->validationError($errors);
 
         $em->flush();
 

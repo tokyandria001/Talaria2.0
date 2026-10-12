@@ -14,12 +14,12 @@ class PlaceRepository extends ServiceEntityRepository
      * et les tags de lieux (Place::tags), qui n'utilisent pas le même vocabulaire.
      */
     private const ACTIVITY_TO_PLACE_TAGS = [
-        'culture'     => ['culture', 'visite'],
-        'nature'      => ['plage', 'visite'],
+        'culture'     => ['culture', 'visite', 'musee'],
+        'nature'      => ['nature', 'plage', 'visite'],
         'nightlife'   => ['bar'],
-        'sport'       => ['sport'],
-        'gastronomie' => ['restaurant', 'bar'],
-        'aventure'    => ['sport', 'visite'],
+        'sport'       => ['sport', 'activite'],
+        'gastronomie' => ['restaurant', 'bar', 'marche'],
+        'aventure'    => ['sport', 'activite', 'nature'],
         'plage'       => ['plage'],
     ];
 

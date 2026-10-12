@@ -15,6 +15,8 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[Route('/api/trips/{tripId}/accommodations', name: 'api_accommodations_')]
 class AccommodationController extends AbstractController
 {
+    use ApiInputTrait;
+
     public function __construct(private EntityManagerInterface $em) {}
 
     /* ── List ─────────────────────────────────── */
@@ -44,29 +46,12 @@ class AccommodationController extends AbstractController
         if (empty($data['checkIn']) || empty($data['checkOut'])) {
             return $this->json(['message' => 'Dates d\'arrivée et de départ requises.'], 400);
         }
-        if ($data['checkOut'] <= $data['checkIn']) {
-            return $this->json(['message' => 'La date de départ doit être après la date d\'arrivée.'], 400);
-        }
 
-        $accommodation = (new Accommodation())
-            ->setTrip($trip)
-            ->setName($data['name'] ?? '')
-            ->setType($data['type'] ?? 'hotel')
-            ->setCheckIn(new \DateTimeImmutable($data['checkIn']))
-            ->setCheckOut(new \DateTimeImmutable($data['checkOut']))
-            ->setPrice(isset($data['price']) && $data['price'] !== '' ? (int) $data['price'] : null)
-            ->setHasSpecialPrice((bool) ($data['hasSpecialPrice'] ?? false))
-            ->setSpecialPriceNote($data['specialPriceNote'] ?? null)
-            ->setLink($data['link'] ?? null);
+        $accommodation = (new Accommodation())->setTrip($trip)->setName('');
+        $this->apply($accommodation, $data);
 
         $errors = $validator->validate($accommodation);
-        if (count($errors) > 0) {
-            $messages = [];
-            foreach ($errors as $e) {
-                $messages[$e->getPropertyPath()] = $e->getMessage();
-            }
-            return $this->json(['message' => 'Données invalides.', 'errors' => $messages], 422);
-        }
+        if (count($errors) > 0) return $this->validationError($errors);
 
         $this->em->persist($accommodation);
         $this->em->flush();
@@ -76,7 +61,7 @@ class AccommodationController extends AbstractController
 
     /* ── Update ───────────────────────────────── */
     #[Route('/{id}', methods: ['PATCH'])]
-    public function update(int $tripId, int $id, Request $req): JsonResponse
+    public function update(int $tripId, int $id, Request $req, ValidatorInterface $validator): JsonResponse
     {
         $trip = $this->findOwnedTrip($tripId);
         if (!$trip) return $this->json(['message' => 'Voyage introuvable.'], 404);
@@ -84,19 +69,12 @@ class AccommodationController extends AbstractController
         $accommodation = $this->em->getRepository(Accommodation::class)->findOneBy(['id' => $id, 'trip' => $trip]);
         if (!$accommodation) return $this->json(['message' => 'Logement introuvable.'], 404);
 
-        $data = json_decode($req->getContent(), true) ?? [];
+        $this->apply($accommodation, json_decode($req->getContent(), true) ?? []);
 
-        if (array_key_exists('name', $data))             $accommodation->setName($data['name']);
-        if (array_key_exists('type', $data))             $accommodation->setType($data['type']);
-        if (array_key_exists('checkIn', $data))          $accommodation->setCheckIn(new \DateTimeImmutable($data['checkIn']));
-        if (array_key_exists('checkOut', $data))         $accommodation->setCheckOut(new \DateTimeImmutable($data['checkOut']));
-        if (array_key_exists('price', $data))            $accommodation->setPrice($data['price'] !== null && $data['price'] !== '' ? (int) $data['price'] : null);
-        if (array_key_exists('hasSpecialPrice', $data))  $accommodation->setHasSpecialPrice((bool) $data['hasSpecialPrice']);
-        if (array_key_exists('specialPriceNote', $data)) $accommodation->setSpecialPriceNote($data['specialPriceNote']);
-        if (array_key_exists('link', $data))             $accommodation->setLink($data['link']);
-
-        if ($accommodation->getCheckOut() <= $accommodation->getCheckIn()) {
-            return $this->json(['message' => 'La date de départ doit être après la date d\'arrivée.'], 400);
+        $errors = $validator->validate($accommodation);
+        if (count($errors) > 0) {
+            $this->em->refresh($accommodation); // annule les modifications invalides
+            return $this->validationError($errors);
         }
 
         $this->em->flush();
@@ -121,6 +99,21 @@ class AccommodationController extends AbstractController
     }
 
     /* ── Helpers ──────────────────────────────── */
+
+    /** Applique les champs présents dans $data (valeurs mal formées → 400) */
+    private function apply(Accommodation $a, array $data): void
+    {
+        $text = fn(string $k) => isset($data[$k]) && $data[$k] !== '' ? trim((string) $data[$k]) : null;
+
+        if (array_key_exists('name', $data))             $a->setName((string) $text('name'));
+        if (array_key_exists('type', $data))             $a->setType((string) $data['type']);
+        if (array_key_exists('checkIn', $data))          $a->setCheckIn($this->parseDate($data['checkIn'], 'date d\'arrivée'));
+        if (array_key_exists('checkOut', $data))         $a->setCheckOut($this->parseDate($data['checkOut'], 'date de départ'));
+        if (array_key_exists('price', $data))            $a->setPrice($this->parseInt($data['price'], 'prix'));
+        if (array_key_exists('hasSpecialPrice', $data))  $a->setHasSpecialPrice((bool) $data['hasSpecialPrice']);
+        if (array_key_exists('specialPriceNote', $data)) $a->setSpecialPriceNote($text('specialPriceNote'));
+        if (array_key_exists('link', $data))             $a->setLink($text('link'));
+    }
 
     private function findOwnedTrip(int $tripId): ?Trip
     {

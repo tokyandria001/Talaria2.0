@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'accommodation')]
@@ -21,11 +22,12 @@ class Accommodation
 
     #[ORM\Column(length: 200)]
     #[Assert\NotBlank(message: 'Le nom du logement est requis.')]
+    #[Assert\Length(max: 200)]
     private string $name;
 
     /** hotel | airbnb | autre */
     #[ORM\Column(length: 20)]
-    #[Assert\Choice(choices: ['hotel', 'airbnb', 'autre'])]
+    #[Assert\Choice(choices: ['hotel', 'airbnb', 'autre'], message: 'Type de logement invalide.')]
     private string $type = 'hotel';
 
     #[ORM\Column(type: 'date_immutable')]
@@ -37,19 +39,32 @@ class Accommodation
     private \DateTimeImmutable $checkOut;
 
     #[ORM\Column(nullable: true)]
+    #[Assert\PositiveOrZero(message: 'Le prix ne peut pas être négatif.')]
     private ?int $price = null;
 
     #[ORM\Column(options: ['default' => false])]
     private bool $hasSpecialPrice = false;
 
     #[ORM\Column(length: 255, nullable: true)]
+    #[Assert\Length(max: 255)]
     private ?string $specialPriceNote = null;
 
     #[ORM\Column(length: 500, nullable: true)]
+    #[Assert\Length(max: 500)]
+    #[Assert\Url(protocols: ['http', 'https'], requireTld: true, message: 'Le lien doit être une adresse web valide (https://...).')]
     private ?string $link = null;
 
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
+
+    #[Assert\Callback]
+    public function validateDates(ExecutionContextInterface $context): void
+    {
+        if (isset($this->checkIn, $this->checkOut) && $this->checkOut <= $this->checkIn) {
+            $context->buildViolation('La date de départ doit être après la date d\'arrivée.')
+                ->atPath('checkOut')->addViolation();
+        }
+    }
 
     #[ORM\PrePersist]
     public function onPrePersist(): void { $this->createdAt = new \DateTimeImmutable(); }
