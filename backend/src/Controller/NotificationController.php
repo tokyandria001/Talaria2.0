@@ -22,7 +22,7 @@ class NotificationController extends AbstractController
         $me = $this->getUser();
 
         $notifs = $this->em->getRepository(Notification::class)
-            ->findBy(['recipient' => $me], ['createdAt' => 'DESC'], 20);
+            ->findBy(['recipient' => $me], ['createdAt' => 'DESC', 'id' => 'DESC'], 20); // id départage les notifications de la même seconde
 
         return $this->json(array_map(fn($n) => $this->serialize($n), $notifs));
     }

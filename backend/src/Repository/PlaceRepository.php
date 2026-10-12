@@ -47,7 +47,7 @@ class PlaceRepository extends ServiceEntityRepository
                ->setParameter('lng2', max($lng1, $lng2));
         }
 
-        $places = $qb->orderBy('p.createdAt', 'DESC')->getQuery()->getResult();
+        $places = $qb->orderBy('p.createdAt', 'DESC')->addOrderBy('p.id', 'DESC')->getQuery()->getResult();
 
         // Filter by tags in PHP (JSON array field) — un lieu matche s'il a au moins un des tags demandés
         if (!empty($tags)) {

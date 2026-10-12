@@ -33,7 +33,7 @@ class ArticleController extends AbstractController
         $qb = $this->em->createQueryBuilder()
             ->select('a')
             ->from(Article::class, 'a')
-            ->orderBy('a.createdAt', 'DESC');
+            ->orderBy('a.createdAt', 'DESC')->addOrderBy('a.id', 'DESC');
 
         if ($req->query->get('mine') === 'true' && $me) {
             $qb->andWhere('a.author = :me')->setParameter('me', $me);

@@ -27,7 +27,7 @@ class PlaceController extends AbstractController
         if ($request->query->get('mine') === 'true') {
             $places = $em->getRepository(Place::class)->findBy(
                 ['createdBy' => $me],
-                ['createdAt' => 'DESC'],
+                ['createdAt' => 'DESC', 'id' => 'DESC'],
             );
         } else {
             $tags        = $request->query->get('tags') ? explode(',', $request->query->get('tags')) : [];

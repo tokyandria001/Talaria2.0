@@ -39,7 +39,7 @@ class GroupController extends AbstractController
     public function list(): JsonResponse
     {
         $me = $this->me();
-        $memberships = $this->em->getRepository(GroupMember::class)->findBy(['user' => $me], ['createdAt' => 'DESC']);
+        $memberships = $this->em->getRepository(GroupMember::class)->findBy(['user' => $me], ['createdAt' => 'DESC', 'id' => 'DESC']);
 
         $groups = $invitations = [];
         foreach ($memberships as $m) {

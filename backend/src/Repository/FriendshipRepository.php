@@ -31,20 +31,20 @@ class FriendshipRepository extends ServiceEntityRepository
         return $this->createQueryBuilder('f')
             ->where('(f.requester = :u OR f.addressee = :u) AND f.status = :accepted')
             ->setParameter('u', $user)->setParameter('accepted', Friendship::ACCEPTED)
-            ->orderBy('f.acceptedAt', 'DESC')
+            ->orderBy('f.acceptedAt', 'DESC')->addOrderBy('f.id', 'DESC')
             ->getQuery()->getResult();
     }
 
     /** @return Friendship[] demandes en attente reçues par $user */
     public function findReceivedRequests(User $user): array
     {
-        return $this->findBy(['addressee' => $user, 'status' => Friendship::PENDING], ['createdAt' => 'DESC']);
+        return $this->findBy(['addressee' => $user, 'status' => Friendship::PENDING], ['createdAt' => 'DESC', 'id' => 'DESC']);
     }
 
     /** @return Friendship[] demandes en attente envoyées par $user */
     public function findSentRequests(User $user): array
     {
-        return $this->findBy(['requester' => $user, 'status' => Friendship::PENDING], ['createdAt' => 'DESC']);
+        return $this->findBy(['requester' => $user, 'status' => Friendship::PENDING], ['createdAt' => 'DESC', 'id' => 'DESC']);
     }
 
     /**
