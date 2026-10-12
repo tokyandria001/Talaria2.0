@@ -47,6 +47,7 @@ export default function MapPage() {
   const [mapLoaded,    setMapLoaded]    = useState(false);
   const [is3D,         setIs3D]         = useState(false);
   const [places,       setPlaces]       = useState([]);
+  const [clusters,     setClusters]     = useState([]);   // bulles numérotées quand la zone contient trop de lieux
   const [bbox,         setBbox]         = useState(null);   // zone visible : seuls ses lieux sont chargés
   const [truncated,    setTruncated]    = useState(false);
   const [activeTags,   setActiveTags]   = useState([]);
@@ -190,9 +191,15 @@ export default function MapPage() {
       const params = new URLSearchParams();
       if (activeTags.length) params.set('tags', activeTags.join(','));
       if (search)            params.set('search', search);
-      if (bbox)              params.set('bbox', bbox);
+      if (bbox) {
+        params.set('bbox', bbox);
+        // Au-delà de 200 lieux dans la zone, le serveur renvoie des bulles regroupées
+        params.set('clusters', 'true');
+        params.set('limit', '200');
+      }
       const { data } = await api.get(`/api/places?${params}`);
       setPlaces(data.places);
+      setClusters(data.clusters ?? []);
       setTruncated(!!data.truncated);
     } catch {/* silently fail if not authenticated yet */}
   }, [activeTags, search, bbox]);
@@ -243,7 +250,26 @@ export default function MapPage() {
       markersRef.current.push(marker);
       popupsRef.current.push(popup);
     });
-  }, [places, mapLoaded]);
+
+    // Bulles : clic = zoom centré dessus, elles se divisent en bulles plus petites puis en lieux
+    clusters.forEach(cluster => {
+      const el = document.createElement('div');
+      const size = cluster.count < 10 ? 'sm' : cluster.count < 100 ? 'md' : cluster.count < 1000 ? 'lg' : 'xl';
+      el.className = `map-cluster map-cluster--${size}`;
+      el.textContent = cluster.count >= 1000
+        ? `${(cluster.count / 1000).toFixed(cluster.count < 10000 ? 1 : 0).replace('.', ',')}k`
+        : cluster.count;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        mapRef.current.easeTo({ center: [cluster.longitude, cluster.latitude], zoom: mapRef.current.getZoom() + 2 });
+      });
+
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([cluster.longitude, cluster.latitude])
+        .addTo(mapRef.current);
+      markersRef.current.push(marker);
+    });
+  }, [places, clusters, mapLoaded]);
 
   /* ── Helpers ── */
   const toggleTag = (tag) =>

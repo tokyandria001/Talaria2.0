@@ -40,6 +40,14 @@ class PlaceController extends AbstractController
             $result      = $repo->search($tags, $search, $bbox, $recommended ? $me : null, $limit);
             $places      = $result['places'];
             $truncated   = $result['truncated'];
+
+            // Trop de lieux dans la zone : bulles numérotées à la place des lieux (la carte reste fluide)
+            if ($truncated && count($bbox) === 4 && $request->query->get('clusters') === 'true') {
+                $grouped   = $repo->clusters($tags, $search, $bbox);
+                $places    = $grouped['places'];
+                $clusters  = $grouped['clusters'];
+                $truncated = false;
+            }
         }
 
         $likedIds = [];
@@ -54,6 +62,8 @@ class PlaceController extends AbstractController
             'places'    => array_map(fn(Place $p) => $this->serialize($p, $likedIds), $places),
             // true : la zone contient d'autres lieux (zoomer ou filtrer pour les voir)
             'truncated' => $truncated ?? false,
+            // Bulles de regroupement (avec clusters=true) : position moyenne et nombre de lieux
+            'clusters'  => $clusters ?? [],
         ]);
     }
 

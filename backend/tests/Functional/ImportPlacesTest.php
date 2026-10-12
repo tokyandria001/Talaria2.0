@@ -81,4 +81,38 @@ final class ImportPlacesTest extends ApiTestCase
         [, $capped] = $this->json('GET', '/api/places?limit=100000', null, $token);
         self::assertCount(31, $capped['places'], 'Limite plafonnée à 500');
     }
+
+    public function testMapGroupsPlacesInBubblesWhenZoomedOut(): void
+    {
+        $rows = [];
+        for ($i = 0; $i < 30; $i++) {
+            $rows[] = ['lat' => 48.85 + $i / 1000, 'lon' => 2.35, 'name' => "Hôtel $i", 'type' => 'hotel'];
+        }
+        $rows[] = ['lat' => 43.3, 'lon' => 5.4, 'name' => 'Hôtel Marseille', 'type' => 'hotel'];
+        $rows[] = ['lat' => 48.86, 'lon' => 2.35, 'name' => 'Bar de Paris', 'type' => 'bar'];
+        $this->import($rows);
+        $token = $this->registerAndLogin();
+
+        // France entière : une bulle pour Paris, Marseille seul reste un lieu
+        [, $france] = $this->json('GET', '/api/places?bbox=41,-5,51,10&limit=10&clusters=true', null, $token);
+        self::assertFalse($france['truncated']);
+        self::assertCount(1, $france['clusters']);
+        self::assertSame(31, $france['clusters'][0]['count']);
+        self::assertEqualsWithDelta(48.865, $france['clusters'][0]['latitude'], 0.01);
+        self::assertSame(['Hôtel Marseille'], array_column($france['places'], 'name'));
+
+        // Filtre de catégorie appliqué aux bulles
+        [, $bars] = $this->json('GET', '/api/places?bbox=41,-5,51,10&limit=1&clusters=true&tags=hotel', null, $token);
+        self::assertSame(30, $bars['clusters'][0]['count']);
+
+        // Zoom suffisant : les lieux eux-mêmes, sans bulle
+        [, $zoomed] = $this->json('GET', '/api/places?bbox=43.2,5.3,43.4,5.5&clusters=true', null, $token);
+        self::assertSame([], $zoomed['clusters']);
+        self::assertSame(['Hôtel Marseille'], array_column($zoomed['places'], 'name'));
+
+        // Sans clusters=true (anciennes versions de l'app) : comportement inchangé
+        [, $legacy] = $this->json('GET', '/api/places?bbox=41,-5,51,10&limit=10', null, $token);
+        self::assertCount(10, $legacy['places']);
+        self::assertSame([], $legacy['clusters']);
+    }
 }

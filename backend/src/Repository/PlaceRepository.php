@@ -91,6 +91,72 @@ class PlaceRepository extends ServiceEntityRepository
         return ['places' => $places, 'truncated' => $truncated];
     }
 
+    /** Nombre de cases de la grille de regroupement sur le petit côté de la zone visible */
+    private const CLUSTER_CELLS = 4;
+
+    /**
+     * Regroupement des lieux de la zone sur une grille (calculé en base, sans charger les lieux) :
+     * une bulle par case avec le nombre de lieux et leur position moyenne. La taille des cases est
+     * une puissance de 2 en degrés, pour que les bulles restent stables quand on déplace la carte
+     * et se divisent quand on zoome. Les cases d'un seul lieu sont renvoyées comme lieux.
+     *
+     * @return array{clusters: list<array{latitude: float, longitude: float, count: int}>, places: Place[]}
+     */
+    public function clusters(array $tags, string $search, array $bbox): array
+    {
+        [$lat1, $lng1, $lat2, $lng2] = array_map('floatval', $bbox);
+        $latMin = min($lat1, $lat2); $latMax = max($lat1, $lat2);
+        $lngMin = min($lng1, $lng2); $lngMax = max($lng1, $lng2);
+
+        $span = max(min($latMax - $latMin, $lngMax - $lngMin), 0.0001);
+        $cell = 2 ** floor(log($span / self::CLUSTER_CELLS, 2));
+
+        // Coordonnées décalées pour rester positives : la troncature entière vaut alors un arrondi inférieur
+        $conn  = $this->getEntityManager()->getConnection();
+        $floor = $conn->getDatabasePlatform() instanceof \Doctrine\DBAL\Platforms\SQLitePlatform
+            ? 'CAST(%s AS INTEGER)' : 'FLOOR(%s)';
+        $cellLat = sprintf($floor, '(latitude + 90) / :cell');
+        $cellLng = sprintf($floor, '(longitude + 180) / :cell');
+
+        $where  = ['latitude BETWEEN :latMin AND :latMax', 'longitude BETWEEN :lngMin AND :lngMax'];
+        $params = ['cell' => $cell, 'latMin' => $latMin, 'latMax' => $latMax, 'lngMin' => $lngMin, 'lngMax' => $lngMax];
+        $types  = [];
+
+        if ($search !== '') {
+            $where[] = '(name LIKE :search OR description LIKE :search)';
+            $params['search'] = '%' . addcslashes($search, '%_') . '%';
+        }
+        $tags = array_values(array_filter(array_map('strval', $tags)));
+        if ($tags) {
+            $where[] = 'primary_tag IN (:tags)';
+            $params['tags'] = $tags;
+            $types['tags'] = \Doctrine\DBAL\ArrayParameterType::STRING;
+        }
+
+        $rows = $conn->fetchAllAssociative(
+            "SELECT $cellLat AS cy, $cellLng AS cx, COUNT(*) AS n, AVG(latitude) AS lat, AVG(longitude) AS lng, MIN(id) AS id
+             FROM place WHERE " . implode(' AND ', $where) . ' GROUP BY cy, cx',
+            $params,
+            $types,
+        );
+
+        $clusters = [];
+        $singleIds = [];
+        foreach ($rows as $row) {
+            if ((int) $row['n'] === 1) {
+                $singleIds[] = (int) $row['id'];
+                continue;
+            }
+            $clusters[] = ['latitude' => (float) $row['lat'], 'longitude' => (float) $row['lng'], 'count' => (int) $row['n']];
+        }
+        usort($clusters, fn($a, $b) => $b['count'] <=> $a['count']);
+
+        return [
+            'clusters' => $clusters,
+            'places'   => $singleIds ? $this->findBy(['id' => $singleIds]) : [],
+        ];
+    }
+
     /** Tags de lieux correspondant aux centres d'intérêt de l'utilisateur. */
     private function matchedPlaceTagsFor(User $user): array
     {

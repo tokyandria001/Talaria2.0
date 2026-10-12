@@ -34,6 +34,7 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
   const mapRef = useRef(null);
 
   const [places,     setPlaces]     = useState([]);
+  const [clusters,   setClusters]   = useState([]); // bulles numérotées quand la zone contient trop de lieux
   const [region,     setRegion]     = useState(FRANCE);
   const [truncated,  setTruncated]  = useState(false);
   const [search,     setSearch]     = useState('');
@@ -74,11 +75,12 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
   useEffect(() => {
     let cancelled = false;
     const id = setTimeout(() => {
-      const params = { bbox: toBbox(region) };
+      // Au-delà de 150 lieux dans la zone, le serveur renvoie des bulles regroupées
+      const params = { bbox: toBbox(region), clusters: 'true', limit: 150 };
       if (search) params.search = search;
       if (serverTags.length) params.tags = serverTags.join(',');
       client.get('/api/places', { params })
-        .then(({ data }) => { if (!cancelled) { setPlaces(data.places ?? []); setTruncated(!!data.truncated); } })
+        .then(({ data }) => { if (!cancelled) { setPlaces(data.places ?? []); setClusters(data.clusters ?? []); setTruncated(!!data.truncated); } })
         .catch(() => {});
     }, 350);
     return () => { cancelled = true; clearTimeout(id); };
@@ -112,6 +114,14 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
       setPreview(patch);
       setDetail(patch);
     } catch { /* ignore */ }
+  };
+
+  // Bulle touchée : zoom centré dessus, elle se divise en bulles plus petites ou en lieux
+  const zoomInto = (c) => {
+    mapRef.current?.animateToRegion({
+      latitude: c.latitude, longitude: c.longitude,
+      latitudeDelta: region.latitudeDelta / 3, longitudeDelta: region.longitudeDelta / 3,
+    }, 500);
   };
 
   const flyToUser = () => {
@@ -150,6 +160,17 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
                   <Ionicons name={cat.icon} size={15} color={Colors.white} />
                 </View>
                 <View style={[s.pinTail, { borderTopColor: cat.color }]} />
+              </View>
+            </Marker>
+          );
+        })}
+        {clusters.map(c => {
+          const size = c.count < 10 ? 34 : c.count < 100 ? 40 : c.count < 1000 ? 48 : 56;
+          return (
+            <Marker key={`c${c.latitude},${c.longitude}`} coordinate={{ latitude: c.latitude, longitude: c.longitude }}
+              anchor={{ x: 0.5, y: 0.5 }} onPress={(e) => { e.stopPropagation?.(); zoomInto(c); }}>
+              <View style={[s.cluster, { width: size, height: size, borderRadius: size / 2 }]}>
+                <Text style={s.clusterText}>{c.count >= 1000 ? `${(c.count / 1000).toFixed(c.count < 10000 ? 1 : 0).replace('.', ',')}k` : c.count}</Text>
               </View>
             </Marker>
           );
@@ -283,6 +304,12 @@ const s = StyleSheet.create({
     borderWidth: 2, borderColor: Colors.white,
   },
   pinActive: { transform: [{ scale: 1.2 }] },
+  cluster: {
+    backgroundColor: Colors.parme, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: 'rgba(255,255,255,0.85)',
+    shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+  },
+  clusterText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 13, color: Colors.white },
   pinTail: {
     width: 0, height: 0, marginTop: -2,
     borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8,
