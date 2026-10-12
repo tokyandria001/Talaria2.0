@@ -1,275 +1,144 @@
 import { useState } from 'react';
 import {
-  View, Text, Image, TextInput, TouchableOpacity, StyleSheet,
+  View, Text, Image, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, StatusBar, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../constants/Colors';
-import TalariaLogo from '../components/TalariaLogo';
-import { Ionicons } from '@expo/vector-icons';
-import { useScaleFade, useSlideUp } from '../_hooks/useEntryAnim';
+import { SocialButton, AuthInput, OrDivider, AuthHeader } from '../components/AuthUI';
+import { useSlideUp } from '../_hooks/useEntryAnim';
 
-const TALI = require('../assets/Logo-09.png');
+// Photo remplaçable : garder le même nom dans assets/auth/
+const BG = require('../assets/auth/register-bg.jpg');
 
 export default function RegisterScreen() {
-  const router        = useRouter();
-  const { register }  = useAuth();
+  const router       = useRouter();
+  const { register } = useAuth();
 
-  const [form, setForm]       = useState({ email: '', firstName: '', lastName: '', username: '', password: '', confirm: '' });
-  const [showPwd, setShowPwd] = useState(false);
+  const [form,    setForm]    = useState({ email: '', password: '', confirm: '' });
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
+  const [error,   setError]   = useState('');
 
-  // Animations
-  const { opacity: logoOpacity, scale: logoScale } = useScaleFade(0);
-  const { opacity: formOpacity, translateY: formY } = useSlideUp(200, 40);
+  const { opacity, translateY } = useSlideUp(100, 30);
 
   const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleRegister = async () => {
-    if (!form.email || !form.password || !form.firstName) {
-      setError('Email, prénom et mot de passe sont requis.'); return;
-    }
-    if (form.password !== form.confirm) {
-      setError('Les mots de passe ne correspondent pas.'); return;
-    }
+    if (!form.email.trim() || !form.password) { setError('Mail et mot de passe sont requis.'); return; }
+    if (form.password !== form.confirm)       { setError('Les mots de passe ne correspondent pas.'); return; }
     setError('');
     setLoading(true);
     try {
-      await register({
-        email:     form.email.trim(),
-        password:  form.password,
-        firstName: form.firstName.trim(),
-        lastName:  form.lastName.trim() || undefined,
-        username:  form.username.trim() || undefined,
-      });
+      // Prénom, pseudo et préférences se complètent ensuite dans le profil
+      await register({ email: form.email.trim(), password: form.password });
       router.replace('/(tabs)/home');
     } catch (err) {
-      const msg = err.response?.data?.message || err.response?.data?.errors?.email;
-      setError(msg || 'Impossible de joindre le serveur.');
+      const data = err.response?.data;
+      setError(data?.errors ? Object.values(data.errors).join('\n') : data?.message || 'Impossible de joindre le serveur.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+    <View style={s.root}>
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+      <Image source={BG} style={s.bg} resizeMode="cover" />
+      <View style={s.veil} />
 
-          <TouchableOpacity style={styles.back} onPress={() => router.back()}>
-            <Text style={styles.backArrow}>←</Text>
-          </TouchableOpacity>
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+            <AuthHeader title="Inscription" onBack={() => router.back()} backStyle={s.back} />
 
-          {/* Logo + Tali */}
-          <Animated.View style={[
-            { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 24 },
-            { opacity: logoOpacity, transform: [{ scale: logoScale }] },
-          ]}>
-            <TalariaLogo height={52} />
-            <Image source={TALI} style={{ width: 52, height: 52, tintColor: Colors.parme }} resizeMode="contain" />
-          </Animated.View>
-
-          {/* Formulaire animé */}
-          <Animated.View style={{
-            opacity: formOpacity,
-            transform: [{ translateY: formY }],
-          }}>
-            <Text style={styles.title}>Inscription</Text>
-
-            <TouchableOpacity style={styles.socialBtn} activeOpacity={0.85}>
-              <Ionicons name="logo-google" size={18} color="#4285F4" />
-              <Text style={styles.socialLabel}>S'inscrire avec Google</Text>
-            </TouchableOpacity>
-            <View style={{ height: 8 }} />
-            <TouchableOpacity style={styles.socialBtn} activeOpacity={0.85}>
-              <Ionicons name="logo-apple" size={18} color="#000" />
-              <Text style={styles.socialLabel}>S'inscrire avec Apple</Text>
-            </TouchableOpacity>
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>Ou alors...</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Email */}
-            <Text style={styles.label}>Mail</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Entrez votre mail"
-              placeholderTextColor={Colors.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={form.email}
-              onChangeText={set('email')}
-            />
-
-            {/* Prénom + Nom */}
-            <View style={styles.row}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Prénom</Text>
-                <TextInput
-                  style={[styles.input, { marginBottom: 0 }]}
-                  placeholder="Jean"
-                  placeholderTextColor={Colors.textMuted}
-                  value={form.firstName}
-                  onChangeText={set('firstName')}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Nom</Text>
-                <TextInput
-                  style={[styles.input, { marginBottom: 0 }]}
-                  placeholder="Dupont"
-                  placeholderTextColor={Colors.textMuted}
-                  value={form.lastName}
-                  onChangeText={set('lastName')}
-                />
-              </View>
-            </View>
-
-            {/* Pseudo */}
-            <Text style={[styles.label, { marginTop: 12 }]}>
-              Pseudo <Text style={styles.optional}>(optionnel)</Text>
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="@explorateur"
-              placeholderTextColor={Colors.textMuted}
-              autoCapitalize="none"
-              value={form.username}
-              onChangeText={set('username')}
-            />
-
-            {/* Mot de passe */}
-            <Text style={styles.label}>Mot de passe</Text>
-            <View style={styles.pwdWrap}>
-              <TextInput
-                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+            <Animated.View style={{ flex: 1, justifyContent: 'center', opacity, transform: [{ translateY }] }}>
+              <AuthInput
+                label="Mail"
+                placeholder="Entrez votre mail"
+                keyboardType="email-address"
+                autoComplete="email"
+                value={form.email}
+                onChangeText={set('email')}
+              />
+              <AuthInput
+                label="Mot de passe"
                 placeholder="Entrez votre mot de passe"
-                placeholderTextColor={Colors.textMuted}
-                secureTextEntry={!showPwd}
+                secure
+                autoComplete="new-password"
                 value={form.password}
                 onChangeText={set('password')}
               />
-              <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPwd(v => !v)}>
-                <Text style={styles.eyeIcon}>{showPwd ? '🙈' : '👁'}</Text>
+              <AuthInput
+                label="Confirmer le mot de passe"
+                placeholder="Entrez votre mot de passe"
+                secure
+                autoComplete="new-password"
+                value={form.confirm}
+                onChangeText={set('confirm')}
+                onSubmitEditing={handleRegister}
+              />
+
+              {!!error && <View style={s.errorBox}><Text style={s.errorText}>{error}</Text></View>}
+
+              <TouchableOpacity
+                style={[s.btn, loading && { opacity: 0.6 }]}
+                onPress={handleRegister}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                <Text style={s.btnText}>{loading ? 'Inscription...' : "Je m'inscris"}</Text>
               </TouchableOpacity>
-            </View>
 
-            <Text style={[styles.label, { marginTop: 12 }]}>Confirmer le mot de passe</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Entrez votre mot de passe"
-              placeholderTextColor={Colors.textMuted}
-              secureTextEntry
-              value={form.confirm}
-              onChangeText={set('confirm')}
-            />
+              <OrDivider />
 
-            {!!error && (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{error}</Text>
+              <View style={{ gap: 12 }}>
+                <SocialButton provider="google" label="S'inscrire avec Google" variant="soft" />
+                <SocialButton provider="apple"  label="S'inscrire avec Apple"  variant="soft" />
               </View>
-            )}
 
-            <TouchableOpacity
-              style={[styles.btn, loading && { opacity: 0.6 }]}
-              onPress={handleRegister}
-              disabled={loading}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.btnText}>{loading ? 'Inscription...' : "Je m'inscris"}</Text>
-            </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.replace('/login')} style={s.switch}>
+                <Text style={s.switchText}>
+                  Vous avez déjà un compte ? <Text style={s.switchLink}>Se connecter</Text>
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
 
-            <Text style={styles.legal}>
-              En créant un compte, vous acceptez nos{' '}
-              <Text style={styles.legalLink} onPress={() => router.push('/cgu')}>
-                Conditions générales d'utilisation
-              </Text>
-              {' '}et notre{' '}
-              <Text style={styles.legalLink} onPress={() => router.push('/privacy')}>Politique de confidentialité</Text>.
+            <Text style={s.legal}>
+              En créant un compte, vous acceptez nos{'\n'}
+              <Text style={s.legalLink} onPress={() => router.push('/cgu')}>Conditions générales d'utilisation</Text>
+              . Veuillez lire notre{' '}
+              <Text style={s.legalLink} onPress={() => router.push('/privacy')}>Politique de confidentialité</Text>.
             </Text>
-
-            <TouchableOpacity onPress={() => router.replace('/login')} style={styles.switchWrap}>
-              <Text style={styles.switchText}>
-                Vous avez déjà un compte ? <Text style={styles.switchLink}>Se connecter</Text>
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: Colors.white },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 40 },
+const s = StyleSheet.create({
+  root:   { flex: 1, backgroundColor: Colors.sableLune },
+  bg:     { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', opacity: 0.12 },
+  veil:   { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(252,249,241,0.6)' },
+  scroll: { flexGrow: 1, paddingHorizontal: 22, paddingBottom: 16 },
 
-  back:      { marginTop: 8, marginBottom: 16, width: 36 },
-  backArrow: { fontSize: 22, color: Colors.text },
+  back: { backgroundColor: 'rgba(79,32,63,0.10)' },
 
-  title: {
-    fontFamily: 'BricolageGrotesque_800ExtraBold',
-    fontSize: 28, color: Colors.text, marginBottom: 20,
-  },
-
-  socialBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderWidth: 1.5, borderColor: Colors.border,
-    borderRadius: 14, paddingVertical: 14, paddingHorizontal: 20,
-  },
-  socialLabel: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.text },
-
-  divider: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 20,
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: {
-    fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted,
-  },
-
-  label: {
-    fontFamily: 'BricolageGrotesque_600SemiBold',
-    fontSize: 13, color: Colors.text, marginBottom: 6, marginTop: 4,
-  },
-  optional: { fontFamily: 'BricolageGrotesque_400Regular', color: Colors.textMuted },
-  input: {
-    backgroundColor: Colors.inputBg, borderRadius: 14,
-    paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 14, fontFamily: 'BricolageGrotesque_400Regular',
-    color: Colors.text, marginBottom: 12,
-  },
-
-  row:     { flexDirection: 'row', gap: 10 },
-  pwdWrap: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  eyeBtn:  { position: 'absolute', right: 14 },
-  eyeIcon: { fontSize: 16 },
-
-  errorBox: { backgroundColor: '#fef2f2', borderRadius: 10, padding: 12, marginBottom: 14 },
+  errorBox:  { backgroundColor: '#fef2f2', borderRadius: 12, padding: 12, marginBottom: 14 },
   errorText: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.error },
 
-  btn: {
-    backgroundColor: Colors.parme,
-    borderRadius: 100, paddingVertical: 16,
-    alignItems: 'center', marginBottom: 16,
-  },
+  btn:     { backgroundColor: Colors.parme, borderRadius: 100, paddingVertical: 16, alignItems: 'center', marginTop: 4 },
   btnText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 15, color: Colors.white },
 
-  legal: {
-    fontFamily: 'BricolageGrotesque_400Regular',
-    fontSize: 12, color: Colors.textMuted,
-    textAlign: 'center', lineHeight: 18, marginBottom: 16,
-  },
-  legalLink: { color: Colors.parme, fontFamily: 'BricolageGrotesque_600SemiBold' },
+  switch:     { alignItems: 'center', marginTop: 24 },
+  switchText: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14, color: Colors.text },
+  switchLink: { color: Colors.parme, textDecorationLine: 'underline' },
 
-  switchWrap: { alignItems: 'center' },
-  switchText: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted },
-  switchLink: { fontFamily: 'BricolageGrotesque_700Bold', color: Colors.parme },
+  legal: {
+    fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, lineHeight: 16,
+    color: Colors.textMuted, textAlign: 'center', marginTop: 24,
+  },
+  legalLink: { textDecorationLine: 'underline' },
 });

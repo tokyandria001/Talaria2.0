@@ -35,10 +35,15 @@ export default function MapScreen() {
   // Géolocalisation
   useEffect(() => {
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
-        setUserLoc(loc.coords);
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        // Dernière position connue en secours si la localisation est désactivée ou indisponible
+        const loc = await Location.getCurrentPositionAsync({})
+          .catch(() => Location.getLastKnownPositionAsync());
+        if (loc) setUserLoc(loc.coords);
+      } catch {
+        // Localisation indisponible : la carte reste centrée sur la France
       }
     })();
   }, []);
