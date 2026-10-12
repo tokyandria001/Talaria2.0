@@ -30,6 +30,8 @@ const EMPTY_ACCOM = {
 };
 
 const fmtDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+/** Ajoute https:// si l'utilisateur a saisi un lien sans protocole (ex. booking.com/...) */
+const withScheme = (u) => { const v = (u ?? '').trim(); return v && !/^[a-z][a-z0-9+.-]*:/i.test(v) ? `https://${v}` : v; };
 const fmtEur  = (n) => n != null ? `${n.toLocaleString('fr-FR')} €` : '—';
 const nights  = (s, e) => Math.max(0, Math.round((new Date(e) - new Date(s)) / 86_400_000));
 const transportIcon = (v) => TRANSPORT_OPTIONS.find(t => t.value === v)?.icon ?? '✈️';
@@ -80,7 +82,7 @@ function AccommodationsStep({ trip }) {
     }
     setSaving(true); setError('');
     try {
-      const payload = { ...form, price: form.price !== '' ? +form.price : null };
+      const payload = { ...form, link: withScheme(form.link), price: form.price !== '' ? +form.price : null };
       const res = editingId
         ? await api.patch(`/api/trips/${trip.id}/accommodations/${editingId}`, payload)
         : await api.post(`/api/trips/${trip.id}/accommodations`, payload);
@@ -247,7 +249,7 @@ function TripModal({ trip, onClose, onSaved }) {
   const addBooking = () => {
     if (!bUrl.trim()) return;
     const label = bLabel.trim() || BOOKING_TYPES.find(t => t.value === bType)?.label || bType;
-    setForm(f => ({ ...f, bookingLinks: [...f.bookingLinks, { type: bType, label, url: bUrl.trim() }] }));
+    setForm(f => ({ ...f, bookingLinks: [...f.bookingLinks, { type: bType, label, url: withScheme(bUrl) }] }));
     setBLabel(''); setBUrl('');
   };
 
@@ -271,6 +273,7 @@ function TripModal({ trip, onClose, onSaved }) {
         fuelConsumption:  form.fuelConsumption  !== '' ? +form.fuelConsumption  : null,
         tollCost:         form.tollCost         !== '' ? +form.tollCost         : null,
         rentalCost:       form.rentalCost       !== '' ? +form.rentalCost       : null,
+        rentalLink:       withScheme(form.rentalLink),
       };
       const res = isEdit
         ? await api.patch(`/api/trips/${trip.id}`, payload)

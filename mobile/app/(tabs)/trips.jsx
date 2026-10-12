@@ -39,6 +39,8 @@ const EMPTY_ACCOM = {
 };
 
 const fmtDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+/** Ajoute https:// si l'utilisateur a saisi un lien sans protocole (ex. booking.com/...) */
+const withScheme = (u) => { const v = (u ?? '').trim(); return v && !/^[a-z][a-z0-9+.-]*:/i.test(v) ? `https://${v}` : v; };
 const fmtEur  = (n) => n != null ? `${n.toLocaleString('fr-FR')} €` : '—';
 const nights  = (s, e) => Math.max(0, Math.round((new Date(e) - new Date(s)) / 86_400_000));
 const tIcon   = (v) => TRANSPORT.find(t => t.value === v)?.icon ?? '✈️';
@@ -194,7 +196,7 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
     }
     setSavingAccom(true);
     try {
-      const payload = { ...accomForm, price: accomForm.price !== '' ? parseInt(accomForm.price) : null };
+      const payload = { ...accomForm, link: withScheme(accomForm.link), price: accomForm.price !== '' ? parseInt(accomForm.price) : null };
       const res = editingAccomId
         ? await client.patch(`/api/trips/${trip.id}/accommodations/${editingAccomId}`, payload)
         : await client.post(`/api/trips/${trip.id}/accommodations`, payload);
@@ -259,7 +261,7 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
   const addBooking = () => {
     if (!bUrl.trim()) return;
     const label = bLabel.trim() || BOOKING_TYPES.find(t => t.value === bType)?.label || bType;
-    setForm(f => ({ ...f, bookingLinks: [...f.bookingLinks, { type: bType, label, url: bUrl.trim() }] }));
+    setForm(f => ({ ...f, bookingLinks: [...f.bookingLinks, { type: bType, label, url: withScheme(bUrl) }] }));
     setBLabel(''); setBUrl('');
   };
 
@@ -277,6 +279,7 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
         fuelConsumption:  form.fuelConsumption  !== '' ? parseFloat(form.fuelConsumption)  : null,
         tollCost:         form.tollCost         !== '' ? parseInt(form.tollCost)         : null,
         rentalCost:       form.rentalCost       !== '' ? parseInt(form.rentalCost)       : null,
+        rentalLink:       withScheme(form.rentalLink),
       };
       const res = isEdit
         ? await client.patch(`/api/trips/${trip.id}`, payload)
