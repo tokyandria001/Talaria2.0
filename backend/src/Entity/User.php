@@ -13,6 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: '`user`')]
 #[ORM\HasLifecycleCallbacks]
 #[UniqueEntity(fields: ['email'], message: 'Un compte existe déjà avec cet email.')]
+#[UniqueEntity(fields: ['username'], message: 'Ce pseudo est déjà pris.', ignoreNull: true)]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]

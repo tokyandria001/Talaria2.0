@@ -37,13 +37,20 @@ export function AuthProvider({ children }) {
     await login(payload.email, payload.password);
   };
 
+  /** Met à jour le profil (prénom, pseudo, préférences...) et l'utilisateur courant */
+  const updateProfile = async (payload) => {
+    const { data } = await client.patch('/api/profile', payload);
+    setUser(data.user);
+    return data.user;
+  };
+
   const logout = async () => {
     await SecureStore.deleteItemAsync('token');
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

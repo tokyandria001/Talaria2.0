@@ -89,17 +89,24 @@ export default function ProfileScreen() {
         <TalariaLogo height={42} />
         <Text style={[s.pageTitle, { color: t.parme }]}>Mon profil</Text>
 
-        {/* Avatar card */}
-        <View style={[s.card, { backgroundColor: t.white, borderColor: t.border }]}>
+        {/* Avatar card — appui : modifier prénom, pseudo et préférences */}
+        <TouchableOpacity
+          style={[s.card, { backgroundColor: t.white, borderColor: t.border }]}
+          onPress={() => router.push({ pathname: '/complete-profile', params: { mode: 'edit' } })}
+          activeOpacity={0.85}
+        >
           <View style={[s.avatarCircle, { backgroundColor: t.parme }]}>
             <Text style={s.avatarText}>{initials}</Text>
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[s.userName, { color: t.text }]}>{user?.firstName ?? ''} {user?.lastName ?? ''}</Text>
             <Text style={[s.userEmail, { color: t.textMuted }]}>{user?.email}</Text>
-            {user?.username && <Text style={[s.userPseudo, { color: t.parme }]}>@{user.username}</Text>}
+            {user?.username
+              ? <Text style={[s.userPseudo, { color: t.parme }]}>@{user.username}</Text>
+              : <Text style={[s.userPseudo, { color: t.parme }]}>Ajouter un pseudo pour que tes amis te trouvent</Text>}
           </View>
-        </View>
+          <Ionicons name="create-outline" size={20} color={t.parme} />
+        </TouchableOpacity>
 
         {/* Amis (phase 7) */}
         <TouchableOpacity

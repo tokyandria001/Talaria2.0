@@ -31,9 +31,9 @@ export default function RegisterScreen() {
     setError('');
     setLoading(true);
     try {
-      // Prénom, pseudo et préférences se complètent ensuite dans le profil
+      // Prénom, pseudo et préférences se complètent juste après
       await register({ email: form.email.trim(), password: form.password });
-      router.replace('/(tabs)/home');
+      router.replace('/complete-profile');
     } catch (err) {
       const data = err.response?.data;
       setError(data?.errors ? Object.values(data.errors).join('\n') : data?.message || 'Impossible de joindre le serveur.');
