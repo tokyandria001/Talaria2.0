@@ -121,6 +121,7 @@ class AccommodationController extends AbstractController
         if (array_key_exists('hasSpecialPrice', $data))  $a->setHasSpecialPrice((bool) $data['hasSpecialPrice']);
         if (array_key_exists('specialPriceNote', $data)) $a->setSpecialPriceNote($text('specialPriceNote'));
         if (array_key_exists('link', $data))             $a->setLink($text('link'));
+        if (array_key_exists('address', $data))          $a->setAddress($text('address'));
     }
 
     /** Voyage visible par l'utilisateur (créateur ou membre du groupe) : il peut en modifier le planning */
@@ -158,6 +159,7 @@ class AccommodationController extends AbstractController
             'hasSpecialPrice'  => $a->hasSpecialPrice(),
             'specialPriceNote' => $a->getSpecialPriceNote(),
             'link'             => $a->getLink(),
+            'address'          => $a->getAddress(),
             'createdAt'        => $a->getCreatedAt()->format('Y-m-d'),
         ];
     }

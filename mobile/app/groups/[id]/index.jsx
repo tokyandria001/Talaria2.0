@@ -99,6 +99,14 @@ export default function GroupScreen() {
           </View>
         )}
 
+        {!invited && (
+          <View style={s.stats}>
+            <Stat value={group.stats?.budget != null ? `${group.stats.budget.toLocaleString('fr-FR')} €` : '—'} label="Budget" />
+            <Stat value={group.stats?.spent != null ? `${group.stats.spent.toLocaleString('fr-FR')} €` : '—'} label="Dépensé" />
+            <Stat value={String(group.stats?.activitiesCount ?? 0)} label="Activités" />
+          </View>
+        )}
+
         {group.description ? <Text style={s.description}>{group.description}</Text> : null}
 
         <View style={s.badges}>
@@ -148,10 +156,28 @@ export default function GroupScreen() {
             )}
 
             <TouchableOpacity style={s.newTrip}
-              onPress={() => router.navigate({ pathname: '/(tabs)/trips', params: { action: 'create', groupId: String(group.id) } })}>
+              onPress={() => router.push({ pathname: '/new-trip', params: { groupId: String(group.id) } })}>
               <Ionicons name="add" size={18} color={Colors.parme} />
               <Text style={s.newTripText}>Créer un voyage pour le groupe</Text>
             </TouchableOpacity>
+
+            {group.activity?.length > 0 && (
+              <>
+                <Text style={s.sectionTitle}>Activité récente</Text>
+                <View style={{ gap: 12 }}>
+                  {group.activity.map(a => (
+                    <TouchableOpacity key={a.id} style={s.event} disabled={!a.tripId}
+                      onPress={() => router.push(`/planning/${a.tripId}`)} activeOpacity={0.85}>
+                      <UserAvatar user={a.actor} size={36} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.eventText}>{a.message}</Text>
+                        <Text style={s.eventMeta}>{timeAgo(a.createdAt)} · {EVENT_LABEL[a.type] ?? 'Groupe'}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
           </>
         )}
       </ScrollView>
@@ -226,6 +252,27 @@ function TripRow({ trip, highlight, onPress }) {
   );
 }
 
+const EVENT_LABEL = { trip_update: 'Planning', group_trip: 'Voyage', group_join: 'Membres', group_created: 'Groupe' };
+
+function timeAgo(isoDate) {
+  const m = Math.floor((Date.now() - new Date(isoDate).getTime()) / 60000);
+  if (m < 1) return "À l'instant";
+  if (m < 60) return `Il y a ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `Il y a ${h} h`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? 'Hier' : `Il y a ${d} j`;
+}
+
+function Stat({ value, label }) {
+  return (
+    <View style={s.stat}>
+      <Text style={s.statValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+      <Text style={s.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
 function Badge({ icon, text }) {
   return (
     <View style={s.badge}>
@@ -262,6 +309,13 @@ const s = StyleSheet.create({
   smallBtnOutline: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: Colors.white },
   smallBtnText:    { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.parme },
 
+  stats:     { flexDirection: 'row', backgroundColor: Colors.parme, borderRadius: 18, paddingVertical: 16, paddingHorizontal: 8, marginBottom: 14 },
+  stat:      { flex: 1, alignItems: 'center' },
+  statValue: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 20, color: Colors.white },
+  statLabel: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+  event:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  eventText: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.text },
+  eventMeta: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: Colors.textMuted, marginTop: 2 },
   description: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14, lineHeight: 20, color: Colors.text },
   badges:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   badge:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(79,32,63,0.08)', borderRadius: 100, paddingHorizontal: 10, paddingVertical: 4 },

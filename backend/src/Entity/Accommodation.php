@@ -27,7 +27,7 @@ class Accommodation
 
     /** hotel | airbnb | autre */
     #[ORM\Column(length: 20)]
-    #[Assert\Choice(choices: ['hotel', 'airbnb', 'autre'], message: 'Type de logement invalide.')]
+    #[Assert\Choice(choices: ['hotel', 'airbnb', 'auberge', 'habitant', 'autre'], message: 'Type de logement invalide.')]
     private string $type = 'hotel';
 
     #[ORM\Column(type: 'date_immutable')]
@@ -53,6 +53,10 @@ class Accommodation
     #[Assert\Length(max: 500)]
     #[Assert\Url(protocols: ['http', 'https'], requireTld: true, message: 'Le lien doit être une adresse web valide (https://...).')]
     private ?string $link = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Assert\Length(max: 255)]
+    private ?string $address = null;
 
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
@@ -94,6 +98,9 @@ class Accommodation
 
     public function getSpecialPriceNote(): ?string { return $this->specialPriceNote; }
     public function setSpecialPriceNote(?string $v): static { $this->specialPriceNote = $v; return $this; }
+
+    public function getAddress(): ?string { return $this->address; }
+    public function setAddress(?string $v): static { $this->address = $v; return $this; }
 
     public function getLink(): ?string { return $this->link; }
     public function setLink(?string $v): static { $this->link = $v; return $this; }

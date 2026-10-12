@@ -82,7 +82,7 @@ class ActivityController extends AbstractController
         if (count($errors) > 0) return $this->validationError($errors);
 
         $this->em->persist($activity);
-        $this->notifyPlanningChange($trip);
+        $this->notifyPlanningChange($trip, $activity->getTitle());
         $this->em->flush();
 
         return $this->json($this->serialize($activity), 201);
@@ -178,13 +178,14 @@ class ActivityController extends AbstractController
     }
 
     /** Prévient les autres membres du groupe (au plus une fois toutes les 10 min par auteur) */
-    private function notifyPlanningChange(Trip $trip): void
+    private function notifyPlanningChange(Trip $trip, ?string $added = null): void
     {
         $me = $this->currentUser();
-        $this->access->notifyGroup($trip, $me, 'trip_update', sprintf(
-            '%s a modifié le planning de « %s »',
-            UserPresenter::public($me)['displayName'], $trip->getTitle() ?: $trip->getDestination(),
-        ), throttle: true);
+        $who = UserPresenter::public($me)['displayName'];
+        $message = $added
+            ? sprintf('%s a ajouté « %s » au planning', $who, $added)
+            : sprintf('%s a modifié le planning de « %s »', $who, $trip->getTitle() ?: $trip->getDestination());
+        $this->access->notifyGroup($trip, $me, 'trip_update', $message, throttle: true);
     }
 
     private function currentUser(): User

@@ -6,7 +6,7 @@ import { comingSoon } from './AuthUI';
 import { Colors } from '../constants/Colors';
 
 const ACTIONS = [
-  { key: 'trip',    icon: 'airplane-outline', title: 'Créer un voyage',  sub: 'Destination, dates, budget, transport',      href: { pathname: '/(tabs)/trips',    params: { action: 'create' } } },
+  { key: 'trip',    icon: 'airplane-outline', title: 'Créer un voyage',  sub: 'Destination, dates, budget, transport',      href: '/new-trip' },
   { key: 'place',   icon: 'location-outline', title: 'Ajouter un lieu',  sub: 'Un resto, un bar, une activité à partager',  href: { pathname: '/(tabs)/discover', params: { view: 'map', action: 'add-place' } } },
   { key: 'article', icon: 'create-outline',   title: 'Écrire un article', sub: 'Partager un itinéraire ou un bon plan',      href: { pathname: '/(tabs)/discover', params: { view: 'community', action: 'write' } } },
   { key: 'group',   icon: 'people-outline',   title: 'Créer un groupe',  sub: 'Organiser un voyage avec vos amis',          href: '/groups/new' },

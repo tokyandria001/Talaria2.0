@@ -5,7 +5,7 @@ import {
   Modal, Alert, Switch, Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import client from '../../api/client';
@@ -675,7 +675,6 @@ export default function TripsScreen() {
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
-  useEffect(() => { fetchTrips(); }, [fetchTrips]);
 
   const handleRefresh = () => { setRefreshing(true); fetchTrips(true); };
 
@@ -710,17 +709,20 @@ export default function TripsScreen() {
     );
   };
 
-  const [createGroupId, setCreateGroupId] = useState(null);
-  const openCreate = (groupId = null) => { setEditTrip(null); setCreateGroupId(groupId); setShowModal(true); };
+  // Création : assistant en 4 étapes (le formulaire en fenêtre sert à la modification)
+  const openCreate = (groupId = null) => router.push({ pathname: '/new-trip', params: groupId ? { groupId: String(groupId) } : {} });
 
-  // « Créer un voyage » depuis le bouton + ou l'écran d'un groupe : ouvre le formulaire puis retire les paramètres
+  // Ancien lien « ?action=create » (menu +, écran groupe) : redirigé vers l'assistant
   const { action, groupId } = useLocalSearchParams();
   useEffect(() => {
     if (action === 'create') {
-      openCreate(groupId ? Number(groupId) : null);
       router.setParams({ action: undefined, groupId: undefined });
+      router.push({ pathname: '/new-trip', params: groupId ? { groupId: String(groupId) } : {} });
     }
   }, [action, groupId, router]);
+
+  // Retour de l'assistant : la liste se met à jour
+  useFocusEffect(useCallback(() => { fetchTrips(true); }, [fetchTrips]));
 
   return (
     <SafeAreaView style={[s.root, { backgroundColor: theme.sableLune }]} edges={['top']}>
@@ -780,7 +782,6 @@ export default function TripsScreen() {
       <TripFormModal
         visible={showModal}
         trip={editTrip}
-        initialGroupId={createGroupId}
         onClose={() => { setShowModal(false); setEditTrip(null); }}
         onSaved={handleSaved}
       />

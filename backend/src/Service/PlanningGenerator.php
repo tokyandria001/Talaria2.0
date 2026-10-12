@@ -37,6 +37,20 @@ class PlanningGenerator
         'gastronomie' => ['Marché local', 'visite'],
     ];
     private const DEFAULT_MORNING = ['Découverte du quartier', 'visite'];
+
+    /** Activités souhaitées pour le voyage (assistant) : tags de lieux et activité générique associés */
+    private const WISH_TAGS = [
+        'plongee'    => ['plage', 'sport', 'activite'],
+        'randonnee'  => ['nature'],
+        'motorise'   => ['activite', 'sport'],
+        'excursions' => ['visite', 'musee', 'culture'],
+    ];
+    private const WISH_FALLBACKS = [
+        'plongee'    => ['Plongée', 'plage'],
+        'randonnee'  => ['Randonnée', 'nature'],
+        'motorise'   => ['Activité motorisée (quad, jet-ski...)', 'activite'],
+        'excursions' => ['Excursion touristique', 'visite'],
+    ];
     private const DEFAULT_LUNCH   = ['Déjeuner — restaurant à choisir', 'restaurant'];
 
     public function __construct(
@@ -68,10 +82,10 @@ class PlanningGenerator
         }
 
         [$morningPool, $lunchPool] = $lat !== null && $lng !== null
-            ? $this->candidatePools($user, $lat, $lng)
+            ? $this->candidatePools($user, $lat, $lng, $trip)
             : [[], []];
 
-        $morningFallbacks = $this->morningFallbacksFor($user);
+        $morningFallbacks = $this->morningFallbacksFor($user, $trip);
 
         $created = 0;
         $dayIndex = 0;
@@ -102,14 +116,22 @@ class PlanningGenerator
     }
 
     /** Lieux autour de la destination, triés par pertinence (préférences) puis popularité. */
-    private function candidatePools(User $user, float $lat, float $lng): array
+    private function candidatePools(User $user, float $lat, float $lng, Trip $trip): array
     {
         $bbox = [$lat - self::RADIUS_DEG, $lng - self::RADIUS_DEG, $lat + self::RADIUS_DEG, $lng + self::RADIUS_DEG];
 
-        return [
-            $this->places->findByFilters(self::MORNING_TAGS, '', $bbox, $user),
-            $this->places->findByFilters(self::LUNCH_TAGS, '', $bbox, $user),
-        ];
+        // Les activités souhaitées pour ce voyage passent en premier, puis les autres lieux du matin
+        $wishTags = array_values(array_unique(array_merge(...array_map(
+            fn (string $w) => self::WISH_TAGS[$w] ?? [],
+            $trip->getWishedActivities() ?: ['_'],
+        ))));
+        $morning = $wishTags ? $this->places->findByFilters($wishTags, '', $bbox, $user) : [];
+        $wishedIds = array_map(fn ($p) => $p->getId(), $morning);
+        foreach ($this->places->findByFilters(self::MORNING_TAGS, '', $bbox, $user) as $place) {
+            if (!in_array($place->getId(), $wishedIds, true)) $morning[] = $place;
+        }
+
+        return [$morning, $this->places->findByFilters(self::LUNCH_TAGS, '', $bbox, $user)];
     }
 
     /** Premier lieu du pool pas encore utilisé dans ce voyage. */
@@ -124,8 +146,12 @@ class PlanningGenerator
         return null;
     }
 
-    private function morningFallbacksFor(User $user): array
+    private function morningFallbacksFor(User $user, Trip $trip): array
     {
+        // Activités souhaitées pour le voyage d'abord, sinon centres d'intérêt du profil
+        $wished = array_values(array_filter(array_map(fn (string $w) => self::WISH_FALLBACKS[$w] ?? null, $trip->getWishedActivities())));
+        if ($wished) return $wished;
+
         $fallbacks = [];
         foreach ($user->getActivityTags() as $tag) {
             if (isset(self::MORNING_FALLBACKS[$tag])) $fallbacks[] = self::MORNING_FALLBACKS[$tag];

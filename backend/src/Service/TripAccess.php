@@ -2,7 +2,6 @@
 
 namespace App\Service;
 
-use App\Entity\Notification;
 use App\Entity\TravelGroup;
 use App\Entity\Trip;
 use App\Entity\User;
@@ -18,10 +17,10 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final class TripAccess
 {
-    /** Pas plus d'une notification « planning modifié » par membre et par auteur toutes les 10 minutes */
-    private const UPDATE_NOTIF_WINDOW = '-10 minutes';
-
-    public function __construct(private EntityManagerInterface $em) {}
+    public function __construct(
+        private EntityManagerInterface $em,
+        private GroupJournal $journal,
+    ) {}
 
     /** Voyage visible par $user, sinon null (→ 404, sans révéler son existence) */
     public function findVisible(int $tripId, User $user): ?Trip
@@ -49,23 +48,13 @@ final class TripAccess
     }
 
     /**
-     * Notifie les autres membres actifs du groupe du voyage.
-     * Avec $throttle, une même personne ne génère qu'une notification par membre toutes les 10 minutes.
+     * Événement d'un voyage de groupe : journal du groupe + notification des autres membres.
+     * Avec $throttle, une même personne ne génère qu'un événement de ce type toutes les 10 minutes.
      */
     public function notifyGroup(Trip $trip, User $from, string $type, string $message, bool $throttle = false): void
     {
-        $group = $trip->getGroup();
-        if (!$group) return;
-
-        foreach ($group->activeMembers() as $member) {
-            $recipient = $member->getUser();
-            if ($recipient->getId() === $from->getId()) continue;
-            if ($throttle && $this->recentlyNotified($recipient, $from, $trip, $type)) continue;
-
-            $this->em->persist((new Notification())
-                ->setRecipient($recipient)->setFromUser($from)
-                ->setTrip($trip)->setGroup($group)
-                ->setType($type)->setMessage($message));
+        if ($trip->getGroup()) {
+            $this->journal->record($trip->getGroup(), $from, $type, $message, $trip, $throttle);
         }
     }
 
@@ -74,16 +63,4 @@ final class TripAccess
         return $trip->getUser()->getId() === $user->getId();
     }
 
-    private function recentlyNotified(User $recipient, User $from, Trip $trip, string $type): bool
-    {
-        return (int) $this->em->getRepository(Notification::class)->createQueryBuilder('n')
-            ->select('COUNT(n.id)')
-            ->where('n.recipient = :r AND n.fromUser = :f AND n.trip = :t AND n.type = :type AND n.createdAt > :since')
-            ->setParameter('r', $recipient)
-            ->setParameter('f', $from)
-            ->setParameter('t', $trip)
-            ->setParameter('type', $type)
-            ->setParameter('since', new \DateTimeImmutable(self::UPDATE_NOTIF_WINDOW))
-            ->getQuery()->getSingleScalarResult() > 0;
-    }
 }

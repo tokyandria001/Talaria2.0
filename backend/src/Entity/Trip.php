@@ -84,6 +84,26 @@ class Trip
     #[ORM\Column(type: 'json', options: ['default' => '[]'])]
     private array $bookingLinks = [];
 
+    /** Activités souhaitées (assistant, étape 1) : guident le remplissage automatique du planning */
+    public const WISHED_ACTIVITIES = ['plongee', 'randonnee', 'motorise', 'excursions'];
+
+    #[ORM\Column(type: 'json', options: ['default' => '[]'])]
+    #[Assert\All([new Assert\Choice(choices: self::WISHED_ACTIVITIES, message: 'Activité souhaitée inconnue.')])]
+    private array $wishedActivities = [];
+
+    /** Prix du billet par personne (avion, train, bus) */
+    #[ORM\Column(nullable: true)]
+    #[Assert\PositiveOrZero(message: 'Le prix du billet ne peut pas être négatif.')]
+    private ?int $transportPricePerPerson = null;
+
+    /** Chacun réserve son billet (sinon l'organisateur avance les frais) */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $eachBooksOwnTransport = false;
+
+    /** Les frais communs sont partagés à parts égales entre les participants */
+    #[ORM\Column(options: ['default' => true])]
+    private bool $splitCostsEqually = true;
+
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private User $user;
@@ -154,6 +174,18 @@ class Trip
     public function getRentalCost(): ?int { return $this->rentalCost; }
     public function setRentalCost(?int $v): static { $this->rentalCost = $v; return $this; }
 
+    public function getWishedActivities(): array { return $this->wishedActivities; }
+    public function setWishedActivities(array $v): static { $this->wishedActivities = array_values(array_unique($v)); return $this; }
+
+    public function getTransportPricePerPerson(): ?int { return $this->transportPricePerPerson; }
+    public function setTransportPricePerPerson(?int $v): static { $this->transportPricePerPerson = $v; return $this; }
+
+    public function eachBooksOwnTransport(): bool { return $this->eachBooksOwnTransport; }
+    public function setEachBooksOwnTransport(bool $v): static { $this->eachBooksOwnTransport = $v; return $this; }
+
+    public function splitCostsEqually(): bool { return $this->splitCostsEqually; }
+    public function setSplitCostsEqually(bool $v): static { $this->splitCostsEqually = $v; return $this; }
+
     public function getBookingLinks(): array { return $this->bookingLinks; }
     public function setBookingLinks(array $v): static { $this->bookingLinks = $v; return $this; }
 
@@ -211,10 +243,14 @@ class Trip
     /** Budget total calculé */
     public function computedTotalCost(): ?int
     {
-        $fuel   = $this->computedFuelCost() ?? 0;
-        $toll   = $this->tollCost ?? 0;
-        $rental = $this->rentalCost ?? 0;
-        if ($fuel === 0 && $toll === 0 && $rental === 0) return null;
-        return $fuel + $toll + $rental;
+        $fuel    = $this->computedFuelCost() ?? 0;
+        $toll    = $this->tollCost ?? 0;
+        $rental  = $this->rentalCost ?? 0;
+        // Billets (avion, train, bus) : prix par personne × nombre de voyageurs
+        $tickets = $this->transportMode !== 'voiture' && $this->transportPricePerPerson
+            ? $this->transportPricePerPerson * $this->travelers
+            : 0;
+        if ($fuel === 0 && $toll === 0 && $rental === 0 && $tickets === 0) return null;
+        return $fuel + $toll + $rental + $tickets;
     }
 }

@@ -2,12 +2,15 @@
 
 namespace App\Controller;
 
+use App\Entity\Activity;
+use App\Entity\GroupActivity;
 use App\Entity\GroupMember;
 use App\Entity\Notification;
 use App\Entity\TravelGroup;
 use App\Entity\Trip;
 use App\Entity\User;
 use App\Repository\FriendshipRepository;
+use App\Service\GroupJournal;
 use App\Service\ImageUploader;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
@@ -33,6 +36,7 @@ class GroupController extends AbstractController
     public function __construct(
         private EntityManagerInterface $em,
         private FriendshipRepository $friendships,
+        private GroupJournal $journal,
     ) {}
 
     /* ── Mes groupes + invitations reçues ─────── */
@@ -76,6 +80,7 @@ class GroupController extends AbstractController
         $invited = $this->inviteFriends($group, $me, $data['memberIds'] ?? []);
         if ($invited instanceof JsonResponse) return $invited;
 
+        $this->journal->record($group, $me, 'group_created', UserPresenter::public($me)['displayName'] . ' a créé le groupe', notify: false);
         $this->em->flush();
 
         return $this->json($this->detail($group, $owner), 201);
@@ -344,12 +349,7 @@ class GroupController extends AbstractController
 
     private function notifyMembers(TravelGroup $group, User $from, string $type, string $message): void
     {
-        foreach ($group->activeMembers() as $m) {
-            if ($m->getUser()->getId() === $from->getId()) continue;
-            $this->em->persist((new Notification())
-                ->setRecipient($m->getUser())->setFromUser($from)->setGroup($group)
-                ->setType($type)->setMessage($message));
-        }
+        $this->journal->record($group, $from, $type, $message);
     }
 
     private function summary(TravelGroup $group, ?GroupMember $me): array
@@ -388,10 +388,25 @@ class GroupController extends AbstractController
             'createdBy'   => UserPresenter::public($t->getUser()),
         ];
         $upcoming = array_values(array_filter($trips, fn (Trip $t) => $t->getEndDate()->format('Y-m-d') >= $today));
+        $next = $upcoming[0] ?? null;
 
         return $this->summary($group, $me) + [
             'trips'       => array_map($tripSummary, $trips),
-            'nextTrip'    => $upcoming ? $tripSummary($upcoming[0]) : null,
+            'nextTrip'    => $next ? $tripSummary($next) : null,
+            // Chiffres de l'écran groupe (prochain voyage) ; « dépensé » arrive avec les dépenses (étape 4)
+            'stats' => [
+                'budget'          => $next?->getBudget(),
+                'spent'           => null,
+                'activitiesCount' => $next ? $this->em->getRepository(Activity::class)->count(['trip' => $next]) : 0,
+            ],
+            'activity' => $me->isActive() ? array_map(fn (GroupActivity $a) => [
+                'id'        => $a->getId(),
+                'type'      => $a->getType(),
+                'message'   => $a->getMessage(),
+                'actor'     => $a->getActor() ? UserPresenter::public($a->getActor()) : null,
+                'tripId'    => $a->getTrip()?->getId(),
+                'createdAt' => $a->getCreatedAt()->format(\DateTimeInterface::ATOM),
+            ], $this->journal->latest($group, 8)) : [],
             'createdAt'   => $group->getCreatedAt()->format(\DateTimeInterface::ATOM),
             'inviteCode'  => $canInvite ? $group->getInviteCode() : null,
             'permissions' => [
@@ -418,6 +433,8 @@ class GroupController extends AbstractController
         $this->em->createQuery('UPDATE App\Entity\Trip t SET t.group = NULL WHERE t.group = :g')
             ->setParameter('g', $group)->execute();
         $this->em->createQuery('DELETE FROM App\Entity\Notification n WHERE n.group = :g')
+            ->setParameter('g', $group)->execute();
+        $this->em->createQuery('DELETE FROM App\Entity\GroupActivity a WHERE a.group = :g')
             ->setParameter('g', $group)->execute();
         $this->em->remove($group);
     }

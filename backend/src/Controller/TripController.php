@@ -120,6 +120,8 @@ class TripController extends AbstractController
         // Notifications liées au voyage supprimées explicitement (pas seulement via ON DELETE CASCADE)
         $this->em->createQuery('DELETE FROM App\Entity\Notification n WHERE n.trip = :t')
             ->setParameter('t', $trip)->execute();
+        $this->em->createQuery('DELETE FROM App\Entity\GroupActivity a WHERE a.trip = :t')
+            ->setParameter('t', $trip)->execute();
         $this->em->remove($trip);
         $this->em->flush();
 
@@ -149,6 +151,10 @@ class TripController extends AbstractController
         if (array_key_exists('rentalLink', $data))        $trip->setRentalLink($text('rentalLink'));
         if (array_key_exists('rentalCost', $data))        $trip->setRentalCost($this->parseInt($data['rentalCost'], 'coût de location'));
         if (array_key_exists('bookingLinks', $data))      $trip->setBookingLinks(is_array($data['bookingLinks']) ? array_values($data['bookingLinks']) : []);
+        if (array_key_exists('wishedActivities', $data))  $trip->setWishedActivities(is_array($data['wishedActivities']) ? array_map('strval', $data['wishedActivities']) : []);
+        if (array_key_exists('transportPricePerPerson', $data)) $trip->setTransportPricePerPerson($this->parseInt($data['transportPricePerPerson'], 'prix du billet'));
+        if (array_key_exists('eachBooksOwnTransport', $data))   $trip->setEachBooksOwnTransport((bool) $data['eachBooksOwnTransport']);
+        if (array_key_exists('splitCostsEqually', $data))       $trip->setSplitCostsEqually((bool) $data['splitCostsEqually']);
     }
 
     /** Rattache le voyage à un groupe (groupId) ou le rend perso (groupId: null) */
@@ -215,6 +221,11 @@ class TripController extends AbstractController
             'rentalLink'       => $t->getRentalLink(),
             'rentalCost'       => $t->getRentalCost(),
             'bookingLinks'     => $t->getBookingLinks(),
+            'wishedActivities' => $t->getWishedActivities(),
+            'transportPricePerPerson' => $t->getTransportPricePerPerson(),
+            'eachBooksOwnTransport'   => $t->eachBooksOwnTransport(),
+            'splitCostsEqually'       => $t->splitCostsEqually(),
+            'budgetPerPerson'  => $t->getBudget() !== null ? (int) round($t->getBudget() / max(1, $t->getTravelers())) : null,
             'createdAt'        => $t->getCreatedAt()->format('Y-m-d'),
         ];
     }

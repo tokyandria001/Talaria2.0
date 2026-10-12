@@ -119,7 +119,7 @@ final class GroupTripTest extends ApiTestCase
         [, $notifs] = $this->json('GET', '/api/notifications', null, $this->token('bob'));
         $updates = array_values(array_filter($notifs, fn ($n) => $n['type'] === 'trip_update'));
         self::assertCount(1, $updates, '3 modifications rapprochées = 1 seule notification');
-        self::assertStringContainsString('a modifié le planning', $updates[0]['message']);
+        self::assertStringContainsString('au planning', $updates[0]['message']);
 
         [, $aliceNotifs] = $this->json('GET', '/api/notifications', null, $this->token('alice'));
         self::assertNotContains('trip_update', array_column($aliceNotifs, 'type'), 'On ne se notifie pas soi-même');

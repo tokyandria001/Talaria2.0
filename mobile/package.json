@@ -11,6 +11,7 @@
   "dependencies": {
     "@expo-google-fonts/bricolage-grotesque": "^0.4.1",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/datetimepicker": "8.4.4",
     "axios": "^1.16.0",
     "expo": "~54.0.37",
     "expo-constants": "~18.0.13",
