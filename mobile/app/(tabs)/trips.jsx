@@ -704,10 +704,16 @@ export default function TripsScreen() {
               : 'Planifiez votre prochain voyage'}
           </Text>
         </View>
-        <TouchableOpacity style={s.createBtn} onPress={openCreate}>
-          <Ionicons name="add" size={18} color={Colors.white} />
-          <Text style={s.createBtnText}>Nouveau</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={s.groupsBtn} onPress={() => router.push('/groups')}>
+            <Ionicons name="people-outline" size={16} color={Colors.parme} />
+            <Text style={s.groupsBtnText}>Groupes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.createBtn} onPress={openCreate}>
+            <Ionicons name="add" size={18} color={Colors.white} />
+            <Text style={s.createBtnText}>Nouveau</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
@@ -771,6 +777,12 @@ const s = StyleSheet.create({
     backgroundColor: Colors.parme, borderRadius: 100,
     paddingVertical: 9, paddingHorizontal: 14,
   },
+  groupsBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderWidth: 1.5, borderColor: Colors.parme, borderRadius: 100,
+    paddingVertical: 8, paddingHorizontal: 12,
+  },
+  groupsBtnText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 13, color: Colors.parme },
   createBtnText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 13, color: Colors.white },
 
   empty: {

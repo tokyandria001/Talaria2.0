@@ -19,8 +19,8 @@ function timeAgo(iso) {
   return `il y a ${Math.floor(h / 24)}j`;
 }
 
-const TYPE_ICON = { like: 'heart', comment: 'chatbubble', friend_request: 'person-add', friend_accept: 'people' };
-const TYPE_COLOR = { like: '#ef4444', comment: Colors.parme, friend_request: Colors.parme, friend_accept: '#16a34a' };
+const TYPE_ICON = { like: 'heart', comment: 'chatbubble', friend_request: 'person-add', friend_accept: 'people', group_invite: 'mail', group_join: 'people-circle' };
+const TYPE_COLOR = { like: '#ef4444', comment: Colors.parme, friend_request: Colors.parme, friend_accept: '#16a34a', group_invite: Colors.parme, group_join: '#16a34a' };
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -86,6 +86,7 @@ export default function NotificationsScreen() {
               onPress={() => {
                 markRead(item.id);
                 if (item.type?.startsWith('friend_')) router.push('/friends');
+                else if (item.group) router.push(`/groups/${item.group.id}`);
               }}
             >
               <View style={[s.iconWrap, { backgroundColor: (TYPE_COLOR[item.type] ?? Colors.parme) + '20' }]}>

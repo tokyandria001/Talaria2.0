@@ -1,0 +1,246 @@
+import { useState, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator, Switch, RefreshControl } from 'react-native';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import client from '../../../api/client';
+import { useAuth } from '../../../context/AuthContext';
+import GroupHero from '../../../components/groups/GroupHero';
+import FriendPickerSheet from '../../../components/groups/FriendPickerSheet';
+import { shareInvite } from '../../../components/groups/shareInvite';
+import BottomSheet from '../../../components/BottomSheet';
+import UserAvatar from '../../../components/UserAvatar';
+import { comingSoon } from '../../../components/AuthUI';
+import { Colors } from '../../../constants/Colors';
+
+/** 13 · Écran groupe principal (+ 16 · Actions du groupe) */
+export default function GroupScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { id } = useLocalSearchParams();
+  const { user } = useAuth();
+
+  const [group,      setGroup]      = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [actions,    setActions]    = useState(false);
+  const [picker,     setPicker]     = useState(false);
+
+  const load = useCallback(() => client.get(`/api/groups/${id}`)
+    .then(({ data }) => setGroup(data))
+    .catch(() => { Alert.alert('Groupe introuvable', "Ce groupe n'existe plus ou vous n'en faites plus partie."); router.back(); })
+    .finally(() => setRefreshing(false)), [id, router]);
+
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const respond = async (accept) => {
+    try {
+      if (accept) setGroup((await client.post(`/api/groups/${id}/accept`)).data);
+      else { await client.post(`/api/groups/${id}/decline`); router.back(); }
+    } catch (err) { Alert.alert('Erreur', err.response?.data?.message || 'Action impossible.'); }
+  };
+
+  const invite = async (users) => {
+    setPicker(false);
+    if (!users.length) return;
+    try {
+      setGroup((await client.post(`/api/groups/${id}/members`, { userIds: users.map(u => u.id) })).data);
+      Alert.alert('Invitations envoyées', `${users.length} ami${users.length > 1 ? 's' : ''} invité${users.length > 1 ? 's' : ''}.`);
+    } catch (err) { Alert.alert('Erreur', err.response?.data?.message || "Impossible d'inviter."); }
+  };
+
+  const leave = () => {
+    setActions(false);
+    const owner = group.myRole === 'owner';
+    Alert.alert('Quitter le groupe ?', owner && group.membersCount > 1
+      ? 'Le membre le plus ancien deviendra organisateur.'
+      : owner ? 'Vous êtes le dernier membre : le groupe sera supprimé.' : `Vous ne ferez plus partie de « ${group.name} ».`, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Quitter', style: 'destructive',
+        onPress: async () => {
+          try { await client.delete(`/api/groups/${id}/members/${user.id}`); router.replace('/groups'); }
+          catch (err) { Alert.alert('Erreur', err.response?.data?.message || 'Impossible de quitter le groupe.'); }
+        },
+      },
+    ]);
+  };
+
+  if (!group) return <View style={[s.root, s.center]}><ActivityIndicator color={Colors.parme} /></View>;
+
+  const invited = group.myStatus === 'invited';
+  const active = group.members.filter(m => m.status === 'active');
+  const pendingCount = group.members.length - active.length;
+  const memberIds = group.members.map(m => m.user.id);
+
+  return (
+    <View style={s.root}>
+      <GroupHero
+        photo={group.photo}
+        label={`${group.membersCount} membre${group.membersCount > 1 ? 's' : ''}`}
+        title={group.name}
+        onBack={() => router.back()}
+      />
+
+      <ScrollView
+        contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 110 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={Colors.parme} />}
+      >
+        {invited && (
+          <View style={s.inviteBox}>
+            <Text style={s.inviteText}>Vous êtes invité à rejoindre ce groupe.</Text>
+            <View style={s.inviteActions}>
+              <TouchableOpacity style={[s.smallBtn, s.smallBtnOutline]} onPress={() => respond(false)}>
+                <Text style={[s.smallBtnText, { color: Colors.parme }]}>Refuser</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.smallBtn} onPress={() => respond(true)}>
+                <Text style={s.smallBtnText}>Rejoindre</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {group.description ? <Text style={s.description}>{group.description}</Text> : null}
+
+        <View style={s.badges}>
+          <Badge icon={group.isPrivate ? 'lock-closed-outline' : 'earth-outline'} text={group.isPrivate ? 'Groupe privé' : 'Groupe ouvert'} />
+          {group.sharedBudget && <Badge icon="wallet-outline" text="Budget partagé" />}
+          {group.myRole === 'owner' && <Badge icon="star-outline" text="Vous organisez" />}
+        </View>
+
+        <View style={s.sectionHeader}>
+          <Text style={[s.sectionTitle, { marginTop: 0, marginBottom: 0 }]}>Membres</Text>
+          <TouchableOpacity onPress={() => router.push(`/groups/${id}/members`)}>
+            <Text style={s.seeAll}>Voir tout{pendingCount ? ` · ${pendingCount} en attente` : ''}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={s.avatars}>
+          {active.slice(0, 7).map((m, i) => (
+            <UserAvatar key={m.user.id} user={m.user} size={42} style={[s.avatar, { marginLeft: i ? -10 : 0 }]} />
+          ))}
+          {group.permissions.canInvite && !invited && (
+            <TouchableOpacity style={s.addAvatar} onPress={() => setPicker(true)}>
+              <Ionicons name="add" size={22} color={Colors.white} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Text style={s.sectionTitle}>Prochain voyage</Text>
+        <View style={s.placeholder}>
+          <Ionicons name="airplane-outline" size={22} color={Colors.orchidee} />
+          <Text style={s.placeholderText}>Bientôt : organisez les voyages du groupe, avec le budget et les dépenses de chacun.</Text>
+        </View>
+      </ScrollView>
+
+      {!invited && (
+        <View style={[s.footer, { paddingBottom: insets.bottom + 12 }]}>
+          <TouchableOpacity style={[s.footerBtn, s.footerPrimary]} onPress={() => comingSoon('La conversation de groupe')}>
+            <Ionicons name="chatbubble-outline" size={16} color={Colors.white} />
+            <Text style={[s.footerText, { color: Colors.white }]}>Conversation</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.footerBtn} onPress={() => setActions(true)}>
+            <Ionicons name="ellipsis-horizontal" size={16} color={Colors.parme} />
+            <Text style={s.footerText}>Actions</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* 16 · Actions du groupe */}
+      <BottomSheet visible={actions} title="Actions du groupe" onClose={() => setActions(false)}>
+        <View style={{ gap: 4, paddingBottom: 8 }}>
+          {group.permissions.canEdit && (
+            <ActionRow icon="pencil-outline" title="Modifier le groupe" sub="Nom, photo, description"
+              onPress={() => { setActions(false); router.push({ pathname: '/groups/new', params: { id } }); }} />
+          )}
+          {group.permissions.canInvite && (
+            <ActionRow icon="person-add-outline" title="Inviter des membres" onPress={() => { setActions(false); setPicker(true); }} />
+          )}
+          {group.permissions.canInvite && (
+            <ActionRow icon="link-outline" title="Partager le lien d'invitation" sub={`Code : ${group.inviteCode}`} onPress={() => shareInvite(group)} />
+          )}
+          <View style={s.actionRow}>
+            <View style={s.actionIcon}><Ionicons name="notifications-outline" size={18} color={Colors.parme} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.actionTitle}>Notifications</Text>
+              <Text style={s.actionSub}>Messages, votes et dépenses — bientôt réglables</Text>
+            </View>
+            <Switch value onValueChange={() => comingSoon('Le réglage des notifications du groupe')}
+              thumbColor={Colors.white} trackColor={{ true: Colors.parme, false: '#d9cfd4' }} />
+          </View>
+          <ActionRow icon="document-text-outline" title="Exporter le budget (PDF)" onPress={() => comingSoon("L'export du budget en PDF")} />
+          <ActionRow icon="exit-outline" title="Quitter le groupe" danger onPress={leave} />
+        </View>
+      </BottomSheet>
+
+      <FriendPickerSheet visible={picker} excludeIds={memberIds} onClose={() => setPicker(false)} onConfirm={invite} />
+    </View>
+  );
+}
+
+function Badge({ icon, text }) {
+  return (
+    <View style={s.badge}>
+      <Ionicons name={icon} size={13} color={Colors.parme} />
+      <Text style={s.badgeText}>{text}</Text>
+    </View>
+  );
+}
+
+function ActionRow({ icon, title, sub, danger, onPress }) {
+  return (
+    <TouchableOpacity style={s.actionRow} onPress={onPress} activeOpacity={0.85}>
+      <View style={[s.actionIcon, danger && { backgroundColor: '#fde8e8' }]}>
+        <Ionicons name={icon} size={18} color={danger ? '#dc2626' : Colors.parme} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[s.actionTitle, danger && { color: '#dc2626' }]}>{title}</Text>
+        {sub ? <Text style={s.actionSub}>{sub}</Text> : null}
+      </View>
+      {!danger && <Ionicons name="chevron-forward" size={18} color={Colors.parme} />}
+    </TouchableOpacity>
+  );
+}
+
+const s = StyleSheet.create({
+  root:   { flex: 1, backgroundColor: Colors.sableLune },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  scroll: { paddingHorizontal: 18, paddingTop: 14 },
+
+  inviteBox:     { backgroundColor: Colors.parme, borderRadius: 18, padding: 16, marginBottom: 14 },
+  inviteText:    { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 15, color: Colors.white },
+  inviteActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  smallBtn:        { flex: 1, backgroundColor: Colors.white, borderRadius: 100, paddingVertical: 10, alignItems: 'center' },
+  smallBtnOutline: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: Colors.white },
+  smallBtnText:    { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.parme },
+
+  description: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14, lineHeight: 20, color: Colors.text },
+  badges:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  badge:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(79,32,63,0.08)', borderRadius: 100, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 11, color: Colors.parme },
+
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 22, marginBottom: 10 },
+  sectionTitle:  { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 17, color: Colors.text, marginTop: 22, marginBottom: 10 },
+  seeAll:        { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.textMuted },
+
+  avatars:   { flexDirection: 'row', alignItems: 'center' },
+  avatar:    { borderWidth: 2, borderColor: Colors.sableLune },
+  addAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: Colors.parme, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+
+  placeholder:     { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.white, borderRadius: 16, padding: 14 },
+  placeholderText: { flex: 1, fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted, lineHeight: 18 },
+
+  footer: {
+    position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', gap: 10,
+    paddingHorizontal: 18, paddingTop: 12, backgroundColor: Colors.sableLune,
+  },
+  footerBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderWidth: 1.5, borderColor: Colors.parme, borderRadius: 100, paddingVertical: 13,
+  },
+  footerPrimary: { backgroundColor: Colors.parme },
+  footerText:    { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.parme },
+
+  actionRow:   { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#efe6e9' },
+  actionIcon:  { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(79,32,63,0.08)', alignItems: 'center', justifyContent: 'center' },
+  actionTitle: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14, color: Colors.text },
+  actionSub:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: Colors.textMuted, marginTop: 1 },
+});

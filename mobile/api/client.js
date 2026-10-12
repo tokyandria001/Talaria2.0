@@ -21,3 +21,6 @@ client.interceptors.response.use(
 );
 
 export default client;
+
+/** URL complète d'un fichier envoyé sur le serveur (ex. /uploads/groups/12_abc.jpg) */
+export const assetUrl = (path) => (path?.startsWith('/') ? `${API_URL}${path}` : path || null);
