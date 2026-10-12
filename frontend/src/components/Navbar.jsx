@@ -13,7 +13,7 @@ function timeAgo(iso) {
   return `il y a ${Math.floor(h / 24)}j`;
 }
 
-const TYPE_ICON  = { like: '❤️', comment: '💬', friend_request: '👋', friend_accept: '🤝', group_invite: '✉️', group_join: '👥' };
+const TYPE_ICON  = { like: '❤️', comment: '💬', friend_request: '👋', friend_accept: '🤝', group_invite: '✉️', group_join: '👥', group_trip: '✈️', trip_update: '📅' };
 
 export default function Navbar() {
   const { user, logout } = useAuth();

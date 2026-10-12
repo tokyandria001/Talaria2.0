@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\GroupMember;
 use App\Entity\Notification;
 use App\Entity\TravelGroup;
+use App\Entity\Trip;
 use App\Entity\User;
 use App\Repository\FriendshipRepository;
 use App\Service\ImageUploader;
@@ -119,7 +120,7 @@ class GroupController extends AbstractController
         if (!$me->isOwner()) return $this->forbidden('Seul l\'organisateur peut supprimer le groupe.');
 
         $uploader->remove($group->getPhoto());
-        $this->em->remove($group);
+        $this->removeGroup($group);
         $this->em->flush();
 
         return $this->json(null, 204);
@@ -180,7 +181,7 @@ class GroupController extends AbstractController
         if ($target->isOwner()) {
             $successor = $group->activeMembers()[0] ?? null;
             if (!$successor) {
-                $this->em->remove($group);
+                $this->removeGroup($group);
                 $this->em->flush();
                 return $this->json(['deleted' => true]);
             }
@@ -373,7 +374,24 @@ class GroupController extends AbstractController
     {
         $canInvite = $this->canInvite($group, $me);
 
+        // Voyages du groupe (étape 3) : visibles des membres actifs uniquement
+        $trips = $me->isActive()
+            ? $this->em->getRepository(Trip::class)->findBy(['group' => $group], ['startDate' => 'ASC', 'id' => 'ASC'])
+            : [];
+        $today = (new \DateTimeImmutable('today'))->format('Y-m-d');
+        $tripSummary = fn (Trip $t) => [
+            'id'          => $t->getId(),
+            'title'       => $t->getTitle(),
+            'destination' => $t->getDestination(),
+            'startDate'   => $t->getStartDate()->format('Y-m-d'),
+            'endDate'     => $t->getEndDate()->format('Y-m-d'),
+            'createdBy'   => UserPresenter::public($t->getUser()),
+        ];
+        $upcoming = array_values(array_filter($trips, fn (Trip $t) => $t->getEndDate()->format('Y-m-d') >= $today));
+
         return $this->summary($group, $me) + [
+            'trips'       => array_map($tripSummary, $trips),
+            'nextTrip'    => $upcoming ? $tripSummary($upcoming[0]) : null,
             'createdAt'   => $group->getCreatedAt()->format(\DateTimeInterface::ATOM),
             'inviteCode'  => $canInvite ? $group->getInviteCode() : null,
             'permissions' => [
@@ -389,6 +407,19 @@ class GroupController extends AbstractController
                 'invitedAt' => $m->getCreatedAt()->format('Y-m-d'),
             ], $group->getMembers()->toArray()),
         ];
+    }
+
+    /**
+     * Supprime un groupe : ses voyages restent à leurs créateurs (détachés), ses notifications disparaissent.
+     * Fait explicitement plutôt que de compter sur les ON DELETE de la base (et sur l'état en mémoire de Doctrine).
+     */
+    private function removeGroup(TravelGroup $group): void
+    {
+        $this->em->createQuery('UPDATE App\Entity\Trip t SET t.group = NULL WHERE t.group = :g')
+            ->setParameter('g', $group)->execute();
+        $this->em->createQuery('DELETE FROM App\Entity\Notification n WHERE n.group = :g')
+            ->setParameter('g', $group)->execute();
+        $this->em->remove($group);
     }
 
     private function notFound(): JsonResponse

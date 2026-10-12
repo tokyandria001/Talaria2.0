@@ -458,6 +458,7 @@ export default function PlanningScreen() {
           <Text style={[s.headerTitle, { color: theme.text }]}>Planning · {trip.destination}</Text>
           <Text style={[s.headerSub, { color: theme.textMuted }]}>
             {days.length} jour{days.length > 1 ? 's' : ''} · {activities.length} activité{activities.length > 1 ? 's' : ''}
+            {trip.group ? ` · 👥 ${trip.group.name}` : ''}
           </Text>
         </View>
       </View>

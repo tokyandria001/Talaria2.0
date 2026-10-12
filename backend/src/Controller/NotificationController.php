@@ -100,6 +100,10 @@ class NotificationController extends AbstractController
                 'id'    => $article->getId(),
                 'title' => $article->getTitle(),
             ] : null,
+            'trip' => $n->getTrip() ? [
+                'id'          => $n->getTrip()->getId(),
+                'destination' => $n->getTrip()->getDestination(),
+            ] : null,
             'group' => $n->getGroup() ? [
                 'id'   => $n->getGroup()->getId(),
                 'name' => $n->getGroup()->getName(),

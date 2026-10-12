@@ -528,6 +528,7 @@ function TripCard({ trip, onEdit, onDelete, onPlanning }) {
       <div className="trip-card-header">
         <div>
           <div className="trip-card-dest">{trip.destination}</div>
+          {trip.group && <div className="trip-group-tag">👥 {trip.group.name}</div>}
           {trip.title && <div className="trip-card-title">{trip.title}</div>}
         </div>
         <div className="trip-transport-badge">
@@ -621,8 +622,13 @@ function TripCard({ trip, onEdit, onDelete, onPlanning }) {
 
       <div className="trip-card-actions">
         <button className="trip-action-btn primary" onClick={() => onPlanning(trip)}>📅 Planning</button>
-        <button className="trip-action-btn" onClick={() => onEdit(trip)}>Modifier</button>
-        <button className="trip-action-btn danger" onClick={() => onDelete(trip)}>Supprimer</button>
+        {/* Voyage de groupe : seuls son créateur et l'organisateur du groupe le modifient */}
+        {trip.permissions?.canManage !== false && (
+          <>
+            <button className="trip-action-btn" onClick={() => onEdit(trip)}>Modifier</button>
+            <button className="trip-action-btn danger" onClick={() => onDelete(trip)}>Supprimer</button>
+          </>
+        )}
       </div>
     </div>
   );

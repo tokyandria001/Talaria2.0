@@ -34,7 +34,12 @@ class Notification
     #[ORM\JoinColumn(name: 'group_id', nullable: true, onDelete: 'CASCADE')]
     private ?TravelGroup $group = null;
 
-    /** like | comment | friend_request | friend_accept | group_invite | group_join */
+    /** Voyage concerné (voyage de groupe créé, planning modifié) */
+    #[ORM\ManyToOne(targetEntity: Trip::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'CASCADE')]
+    private ?Trip $trip = null;
+
+    /** like | comment | friend_request | friend_accept | group_invite | group_join | group_trip | trip_update */
     #[ORM\Column(length: 20)]
     private string $type;
 
@@ -60,6 +65,9 @@ class Notification
 
     public function getArticle(): ?Article { return $this->article; }
     public function setArticle(?Article $v): static { $this->article = $v; return $this; }
+
+    public function getTrip(): ?Trip { return $this->trip; }
+    public function setTrip(?Trip $v): static { $this->trip = $v; return $this; }
 
     public function getGroup(): ?TravelGroup { return $this->group; }
     public function setGroup(?TravelGroup $v): static { $this->group = $v; return $this; }

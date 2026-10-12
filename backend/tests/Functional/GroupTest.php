@@ -3,36 +3,12 @@
 namespace App\Tests\Functional;
 
 use App\Tests\ApiTestCase;
+use App\Tests\SocialTestTrait;
 
 /** Phase 8 (étape 2) — groupes de voyage : création, invitations, code, départs */
 final class GroupTest extends ApiTestCase
 {
-    /** @var array<string, array{token: string, id: int}> */
-    private array $users = [];
-
-    private function user(string $name): array
-    {
-        if (!isset($this->users[$name])) {
-            $token = $this->registerAndLogin("$name@talaria.test");
-            $this->json('PATCH', '/api/profile', ['firstName' => ucfirst($name), 'username' => $name], $token);
-            [, $me] = $this->json('GET', '/api/auth/me', null, $token);
-            $this->users[$name] = ['token' => $token, 'id' => $me['user']['id']];
-        }
-        return $this->users[$name];
-    }
-
-    private function befriend(string $a, string $b): void
-    {
-        [, $res] = $this->json('POST', '/api/friends/requests', ['userId' => $this->user($b)['id']], $this->user($a)['token']);
-        $this->json('POST', "/api/friends/requests/{$res['requestId']}/accept", null, $this->user($b)['token']);
-    }
-
-    private function createGroup(string $owner, array $body = []): array
-    {
-        [$code, $group] = $this->json('POST', '/api/groups', $body + ['name' => 'Monterrey 2026'], $this->user($owner)['token']);
-        self::assertSame(201, $code, json_encode($group));
-        return $group;
-    }
+    use SocialTestTrait;
 
     private function memberStatus(array $group, string $name): ?string
     {

@@ -124,11 +124,36 @@ export default function GroupScreen() {
           )}
         </View>
 
-        <Text style={s.sectionTitle}>Prochain voyage</Text>
-        <View style={s.placeholder}>
-          <Ionicons name="airplane-outline" size={22} color={Colors.orchidee} />
-          <Text style={s.placeholderText}>Bientôt : organisez les voyages du groupe, avec le budget et les dépenses de chacun.</Text>
-        </View>
+        {!invited && (
+          <>
+            <Text style={s.sectionTitle}>Prochain voyage</Text>
+            {group.nextTrip ? (
+              <TripRow trip={group.nextTrip} highlight onPress={() => router.push(`/planning/${group.nextTrip.id}`)} />
+            ) : (
+              <View style={s.placeholder}>
+                <Ionicons name="airplane-outline" size={22} color={Colors.orchidee} />
+                <Text style={s.placeholderText}>Aucun voyage prévu. Créez le premier voyage du groupe : tous les membres pourront le compléter.</Text>
+              </View>
+            )}
+
+            {group.trips.filter(t => t.id !== group.nextTrip?.id).length > 0 && (
+              <>
+                <Text style={s.sectionTitle}>Autres voyages</Text>
+                <View style={{ gap: 8 }}>
+                  {group.trips.filter(t => t.id !== group.nextTrip?.id).map(t => (
+                    <TripRow key={t.id} trip={t} onPress={() => router.push(`/planning/${t.id}`)} />
+                  ))}
+                </View>
+              </>
+            )}
+
+            <TouchableOpacity style={s.newTrip}
+              onPress={() => router.navigate({ pathname: '/(tabs)/trips', params: { action: 'create', groupId: String(group.id) } })}>
+              <Ionicons name="add" size={18} color={Colors.parme} />
+              <Text style={s.newTripText}>Créer un voyage pour le groupe</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
       {!invited && (
@@ -173,6 +198,31 @@ export default function GroupScreen() {
 
       <FriendPickerSheet visible={picker} excludeIds={memberIds} onClose={() => setPicker(false)} onConfirm={invite} />
     </View>
+  );
+}
+
+const fmtShort = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('fr-FR', { timeZone: 'UTC', day: '2-digit', month: '2-digit' });
+const nightsBetween = (a, b) => Math.round((new Date(`${b}T00:00:00Z`) - new Date(`${a}T00:00:00Z`)) / 86_400_000);
+const daysUntil = (iso) => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.round((new Date(`${iso}T00:00:00`) - today) / 86_400_000);
+};
+
+/** Voyage du groupe : destination, dates, nuits et compte à rebours (J-12, « En cours ») */
+function TripRow({ trip, highlight, onPress }) {
+  const n = nightsBetween(trip.startDate, trip.endDate);
+  const d = daysUntil(trip.startDate);
+  const countdown = d > 0 ? `J-${d}` : daysUntil(trip.endDate) >= 0 ? 'En cours' : 'Terminé';
+  return (
+    <TouchableOpacity style={[s.trip, highlight && s.tripHighlight]} onPress={onPress} activeOpacity={0.85}>
+      <View style={s.tripIcon}><Ionicons name="airplane" size={20} color={Colors.parme} /></View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.tripName} numberOfLines={1}>{trip.title || trip.destination}</Text>
+        <Text style={s.tripDates}>{fmtShort(trip.startDate)} → {fmtShort(trip.endDate)} · {n} nuit{n > 1 ? 's' : ''}</Text>
+        <Text style={s.tripCountdown}>{countdown}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={Colors.parme} />
+    </TouchableOpacity>
   );
 }
 
@@ -225,6 +275,17 @@ const s = StyleSheet.create({
   avatar:    { borderWidth: 2, borderColor: Colors.sableLune },
   addAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: Colors.parme, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
 
+  trip:          { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.white, borderRadius: 16, padding: 12 },
+  tripHighlight: { borderWidth: 1.5, borderColor: Colors.orchidee },
+  tripIcon:      { width: 52, height: 52, borderRadius: 12, backgroundColor: 'rgba(79,32,63,0.08)', alignItems: 'center', justifyContent: 'center' },
+  tripName:      { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 15, color: Colors.text },
+  tripDates:     { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  tripCountdown: {
+    alignSelf: 'flex-start', marginTop: 6, fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 11, color: Colors.parme,
+    backgroundColor: 'rgba(79,32,63,0.08)', borderRadius: 100, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden',
+  },
+  newTrip:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderStyle: 'dashed', borderColor: Colors.parme, borderRadius: 100, paddingVertical: 12, marginTop: 16 },
+  newTripText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.parme },
   placeholder:     { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.white, borderRadius: 16, padding: 14 },
   placeholderText: { flex: 1, fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted, lineHeight: 18 },
 

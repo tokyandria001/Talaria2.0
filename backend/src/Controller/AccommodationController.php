@@ -5,6 +5,8 @@ namespace App\Controller;
 use App\Entity\Accommodation;
 use App\Entity\Trip;
 use App\Entity\User;
+use App\Service\TripAccess;
+use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -17,7 +19,10 @@ class AccommodationController extends AbstractController
 {
     use ApiInputTrait;
 
-    public function __construct(private EntityManagerInterface $em) {}
+    public function __construct(
+        private EntityManagerInterface $em,
+        private TripAccess $access,
+    ) {}
 
     /* ── List ─────────────────────────────────── */
     #[Route('', methods: ['GET'])]
@@ -54,6 +59,7 @@ class AccommodationController extends AbstractController
         if (count($errors) > 0) return $this->validationError($errors);
 
         $this->em->persist($accommodation);
+        $this->notifyPlanningChange($trip);
         $this->em->flush();
 
         return $this->json($this->serialize($accommodation), 201);
@@ -77,6 +83,7 @@ class AccommodationController extends AbstractController
             return $this->validationError($errors);
         }
 
+        $this->notifyPlanningChange($trip);
         $this->em->flush();
 
         return $this->json($this->serialize($accommodation));
@@ -93,6 +100,7 @@ class AccommodationController extends AbstractController
         if (!$accommodation) return $this->json(['message' => 'Logement introuvable.'], 404);
 
         $this->em->remove($accommodation);
+        $this->notifyPlanningChange($trip);
         $this->em->flush();
 
         return $this->json(null, 204);
@@ -115,13 +123,27 @@ class AccommodationController extends AbstractController
         if (array_key_exists('link', $data))             $a->setLink($text('link'));
     }
 
+    /** Voyage visible par l'utilisateur (créateur ou membre du groupe) : il peut en modifier le planning */
     private function findOwnedTrip(int $tripId): ?Trip
     {
+        return $this->access->findVisible($tripId, $this->currentUser());
+    }
+
+    /** Prévient les autres membres du groupe (au plus une fois toutes les 10 min par auteur) */
+    private function notifyPlanningChange(Trip $trip): void
+    {
+        $me = $this->currentUser();
+        $this->access->notifyGroup($trip, $me, 'trip_update', sprintf(
+            '%s a modifié le planning de « %s »',
+            UserPresenter::public($me)['displayName'], $trip->getTitle() ?: $trip->getDestination(),
+        ), throttle: true);
+    }
+
+    private function currentUser(): User
+    {
         /** @var User $me */
-        $me   = $this->getUser();
-        $trip = $this->em->getRepository(Trip::class)->find($tripId);
-        if (!$trip || $trip->getUser()->getId() !== $me->getId()) return null;
-        return $trip;
+        $me = $this->getUser();
+        return $me;
     }
 
     private function serialize(Accommodation $a): array

@@ -88,6 +88,11 @@ class Trip
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private User $user;
 
+    /** Groupe du voyage (null = voyage perso). Si le groupe est supprimé, le voyage reste à son créateur. */
+    #[ORM\ManyToOne(targetEntity: TravelGroup::class)]
+    #[ORM\JoinColumn(name: 'group_id', nullable: true, onDelete: 'SET NULL')]
+    private ?TravelGroup $group = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -154,6 +159,9 @@ class Trip
 
     public function getUser(): User { return $this->user; }
     public function setUser(User $v): static { $this->user = $v; return $this; }
+
+    public function getGroup(): ?TravelGroup { return $this->group; }
+    public function setGroup(?TravelGroup $v): static { $this->group = $v; return $this; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }

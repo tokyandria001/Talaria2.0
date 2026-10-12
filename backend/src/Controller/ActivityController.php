@@ -7,6 +7,8 @@ use App\Entity\Place;
 use App\Entity\Trip;
 use App\Entity\User;
 use App\Service\PlanningGenerator;
+use App\Service\TripAccess;
+use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -19,7 +21,10 @@ class ActivityController extends AbstractController
 {
     use ApiInputTrait;
 
-    public function __construct(private EntityManagerInterface $em) {}
+    public function __construct(
+        private EntityManagerInterface $em,
+        private TripAccess $access,
+    ) {}
 
     /* ── List (planning) ──────────────────────── */
     #[Route('', methods: ['GET'])]
@@ -45,6 +50,10 @@ class ActivityController extends AbstractController
         /** @var User $me */
         $me      = $this->getUser();
         $created = $generator->generate($trip, $me, $lat, $lng, (bool) ($data['replaceAuto'] ?? false));
+        if ($created > 0) {
+            $this->notifyPlanningChange($trip);
+            $this->em->flush();
+        }
 
         return $this->json(['created' => $created, 'activities' => $this->planning($trip)]);
     }
@@ -73,6 +82,7 @@ class ActivityController extends AbstractController
         if (count($errors) > 0) return $this->validationError($errors);
 
         $this->em->persist($activity);
+        $this->notifyPlanningChange($trip);
         $this->em->flush();
 
         return $this->json($this->serialize($activity), 201);
@@ -97,6 +107,7 @@ class ActivityController extends AbstractController
         $errors = $validator->validate($activity);
         if (count($errors) > 0) return $this->validationError($errors);
 
+        $this->notifyPlanningChange($trip);
         $this->em->flush();
 
         return $this->json($this->serialize($activity));
@@ -113,6 +124,7 @@ class ActivityController extends AbstractController
         if (!$activity) return $this->json(['message' => 'Activité introuvable.'], 404);
 
         $this->em->remove($activity);
+        $this->notifyPlanningChange($trip);
         $this->em->flush();
 
         return $this->json(null, 204);
@@ -159,13 +171,27 @@ class ActivityController extends AbstractController
         return array_map([$this, 'serialize'], $activities);
     }
 
+    /** Voyage visible par l'utilisateur (créateur ou membre du groupe) : il peut en modifier le planning */
     private function findOwnedTrip(int $tripId): ?Trip
     {
+        return $this->access->findVisible($tripId, $this->currentUser());
+    }
+
+    /** Prévient les autres membres du groupe (au plus une fois toutes les 10 min par auteur) */
+    private function notifyPlanningChange(Trip $trip): void
+    {
+        $me = $this->currentUser();
+        $this->access->notifyGroup($trip, $me, 'trip_update', sprintf(
+            '%s a modifié le planning de « %s »',
+            UserPresenter::public($me)['displayName'], $trip->getTitle() ?: $trip->getDestination(),
+        ), throttle: true);
+    }
+
+    private function currentUser(): User
+    {
         /** @var User $me */
-        $me   = $this->getUser();
-        $trip = $this->em->getRepository(Trip::class)->find($tripId);
-        if (!$trip || $trip->getUser()->getId() !== $me->getId()) return null;
-        return $trip;
+        $me = $this->getUser();
+        return $me;
     }
 
     private function serialize(Activity $a): array

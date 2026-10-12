@@ -57,13 +57,21 @@ function computeFuel(km, price, conso) {
    ════════════════════════════════════ */
 function TripCard({ trip, onEdit, onDelete, onPlanning }) {
   const n = nights(trip.startDate, trip.endDate);
+  // Sans droits de gestion (membre d'un groupe), on ouvre directement le planning
+  const canManage = trip.permissions?.canManage ?? true;
 
   return (
-    <TouchableOpacity style={s.card} activeOpacity={0.85} onPress={() => onEdit(trip)}>
+    <TouchableOpacity style={s.card} activeOpacity={0.85} onPress={() => (canManage ? onEdit(trip) : onPlanning(trip))}>
       <View style={s.cardHeader}>
         <View style={{ flex: 1 }}>
           <Text style={s.cardDest}>{trip.destination}</Text>
           {trip.title ? <Text style={s.cardTitle}>{trip.title}</Text> : null}
+          {trip.group ? (
+            <View style={s.groupTag}>
+              <Ionicons name="people" size={11} color={Colors.parme} />
+              <Text style={s.groupTagText}>{trip.group.name}</Text>
+            </View>
+          ) : null}
         </View>
         <View style={s.transBadge}>
           <Text style={s.transBadgeText}>{tIcon(trip.transportMode)} {tLabel(trip.transportMode)}</Text>
@@ -129,14 +137,18 @@ function TripCard({ trip, onEdit, onDelete, onPlanning }) {
           <Ionicons name="calendar-outline" size={13} color={Colors.white} />
           <Text style={[s.actionBtnText, { color: Colors.white }]}>Planning</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={s.actionBtn} onPress={() => onEdit(trip)}>
-          <Ionicons name="pencil-outline" size={13} color={Colors.parme} />
-          <Text style={s.actionBtnText}>Modifier</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.actionBtn, s.actionBtnDanger]} onPress={() => onDelete(trip)}>
-          <Ionicons name="trash-outline" size={13} color="#dc2626" />
-          <Text style={[s.actionBtnText, { color: '#dc2626' }]}>Supprimer</Text>
-        </TouchableOpacity>
+        {canManage && (
+          <TouchableOpacity style={s.actionBtn} onPress={() => onEdit(trip)}>
+            <Ionicons name="pencil-outline" size={13} color={Colors.parme} />
+            <Text style={s.actionBtnText}>Modifier</Text>
+          </TouchableOpacity>
+        )}
+        {canManage && (
+          <TouchableOpacity style={[s.actionBtn, s.actionBtnDanger]} onPress={() => onDelete(trip)}>
+            <Ionicons name="trash-outline" size={13} color="#dc2626" />
+            <Text style={[s.actionBtnText, { color: '#dc2626' }]}>Supprimer</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -152,14 +164,16 @@ const EMPTY = {
   distanceKm: '', fuelPricePerLiter: '', fuelConsumption: '', tollCost: '',
   needsRental: false, rentalLink: '', rentalCost: '',
   bookingLinks: [],
+  groupId: null,
 };
 
-function TripFormModal({ visible, trip, onClose, onSaved }) {
+function TripFormModal({ visible, trip, initialGroupId, onClose, onSaved }) {
   const isEdit = !!trip;
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [groups, setGroups] = useState([]);
   const [bType, setBType] = useState('hotel');
   const [bLabel, setBLabel] = useState('');
   const [bUrl, setBUrl] = useState('');
@@ -250,9 +264,12 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
         rentalLink:       trip.rentalLink       ?? '',
         rentalCost:       trip.rentalCost       != null ? String(trip.rentalCost) : '',
         bookingLinks:     trip.bookingLinks     ?? [],
-      } : { ...EMPTY });
+        groupId:          trip.group?.id        ?? null,
+      } : { ...EMPTY, groupId: initialGroupId ?? null });
+      // Groupes proposés dans « Pour qui ? »
+      client.get('/api/groups').then(({ data }) => setGroups(data.groups)).catch(() => setGroups([]));
     }
-  }, [visible, trip, fetchAccommodations]);
+  }, [visible, trip, initialGroupId, fetchAccommodations]);
 
   const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -320,6 +337,19 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
           {/* ── Step 0 ── */}
           {step === 0 && (
             <>
+              <Text style={ms.label}>Pour qui ?</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                {[{ id: null, name: 'Voyage perso', icon: '👤' }, ...groups.map(g => ({ id: g.id, name: g.name, icon: '👥' }))].map(opt => (
+                  <TouchableOpacity key={opt.id ?? 'perso'}
+                    style={[ms.pill, form.groupId === opt.id && ms.pillActive, { marginRight: 6 }]}
+                    onPress={() => setForm(f => ({ ...f, groupId: opt.id }))}>
+                    <Text style={[ms.pillText, form.groupId === opt.id && ms.pillTextActive]}>{opt.icon} {opt.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              {form.groupId ? (
+                <Text style={ms.groupHint}>Tous les membres du groupe verront ce voyage et pourront modifier son planning.</Text>
+              ) : null}
               <View style={ms.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={ms.label}>Ville de départ</Text>
@@ -680,13 +710,17 @@ export default function TripsScreen() {
     );
   };
 
-  const openCreate = () => { setEditTrip(null); setShowModal(true); };
+  const [createGroupId, setCreateGroupId] = useState(null);
+  const openCreate = (groupId = null) => { setEditTrip(null); setCreateGroupId(groupId); setShowModal(true); };
 
-  // « Créer un voyage » depuis le bouton + : ouvre le formulaire puis retire le paramètre
-  const { action } = useLocalSearchParams();
+  // « Créer un voyage » depuis le bouton + ou l'écran d'un groupe : ouvre le formulaire puis retire les paramètres
+  const { action, groupId } = useLocalSearchParams();
   useEffect(() => {
-    if (action === 'create') { openCreate(); router.setParams({ action: undefined }); }
-  }, [action, router]);
+    if (action === 'create') {
+      openCreate(groupId ? Number(groupId) : null);
+      router.setParams({ action: undefined, groupId: undefined });
+    }
+  }, [action, groupId, router]);
 
   return (
     <SafeAreaView style={[s.root, { backgroundColor: theme.sableLune }]} edges={['top']}>
@@ -709,7 +743,7 @@ export default function TripsScreen() {
             <Ionicons name="people-outline" size={16} color={Colors.parme} />
             <Text style={s.groupsBtnText}>Groupes</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.createBtn} onPress={openCreate}>
+          <TouchableOpacity style={s.createBtn} onPress={() => openCreate()}>
             <Ionicons name="add" size={18} color={Colors.white} />
             <Text style={s.createBtnText}>Nouveau</Text>
           </TouchableOpacity>
@@ -725,7 +759,7 @@ export default function TripsScreen() {
           <Image source={require('../../assets/STICKERS.png')} style={s.emptyIcon} resizeMode="contain" />
           <Text style={[s.emptyTitle, { color: theme.text }]}>Aucun voyage planifié</Text>
           <Text style={[s.emptySub, { color: theme.textMuted }]}>Créez votre premier voyage et gérez votre budget et vos réservations.</Text>
-          <TouchableOpacity style={s.createBtn} onPress={openCreate}>
+          <TouchableOpacity style={s.createBtn} onPress={() => openCreate()}>
             <Text style={s.createBtnText}>Créer mon premier voyage</Text>
           </TouchableOpacity>
         </View>
@@ -746,6 +780,7 @@ export default function TripsScreen() {
       <TripFormModal
         visible={showModal}
         trip={editTrip}
+        initialGroupId={createGroupId}
         onClose={() => { setShowModal(false); setEditTrip(null); }}
         onSaved={handleSaved}
       />
@@ -777,6 +812,11 @@ const s = StyleSheet.create({
     backgroundColor: Colors.parme, borderRadius: 100,
     paddingVertical: 9, paddingHorizontal: 14,
   },
+  groupTag: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 6,
+    backgroundColor: Colors.parmeLight ?? '#f5eef8', borderRadius: 100, paddingHorizontal: 8, paddingVertical: 2,
+  },
+  groupTagText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 11, color: Colors.parme },
   groupsBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     borderWidth: 1.5, borderColor: Colors.parme, borderRadius: 100,
@@ -878,6 +918,7 @@ const ms = StyleSheet.create({
   pillText:   { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.text },
   pillTextActive: { color: Colors.parme },
 
+  groupHint: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.textMuted, marginTop: -4, marginBottom: 12 },
   carBox: { backgroundColor: '#fcf9f1', borderRadius: 12, padding: 12 },
   fuelPreview: { backgroundColor: Colors.parmeLight ?? '#f5eef8', borderRadius: 8, padding: 10, marginTop: 6 },
   fuelPreviewText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 12, color: Colors.parme },
