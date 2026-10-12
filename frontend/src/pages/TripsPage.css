@@ -306,3 +306,31 @@
 .trip-confirm-box p  { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; }
 .trip-confirm-actions { display: flex; gap: 10px; }
 .trip-confirm-actions button { flex: 1; }
+
+/* Bouton planning */
+.trip-action-btn.primary { border-color: var(--parme); background: var(--parme); color: #fff; }
+.trip-action-btn.primary:hover { background: #3a1830; color: #fff; }
+
+/* Logements */
+.accom-list { display: flex; flex-direction: column; gap: 10px; }
+.accom-card {
+  background: var(--sable-lune); border: 1px solid var(--border);
+  border-radius: 14px; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.accom-card-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.accom-card-header strong { font-size: 14px; color: var(--text); }
+.accom-card-actions { display: flex; gap: 10px; flex-shrink: 0; }
+.accom-card-actions button {
+  border: none; background: none; cursor: pointer; padding: 0;
+  font-family: inherit; font-size: 12px; font-weight: 600; color: var(--parme);
+}
+.accom-card-actions button.danger { color: #dc2626; }
+.accom-card-dates { font-size: 13px; color: var(--text); }
+.accom-card-dates span { color: var(--text-muted); }
+.accom-card-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text); }
+.accom-card-meta a { color: var(--parme); text-decoration: none; }
+.accom-badge {
+  background: var(--parme-light); color: var(--parme);
+  border-radius: 100px; padding: 1px 8px; font-size: 11px;
+}

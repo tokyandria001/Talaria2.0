@@ -5,6 +5,7 @@ import {
   Modal, Alert, Switch, Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import client from '../../api/client';
@@ -52,7 +53,7 @@ function computeFuel(km, price, conso) {
 /* ════════════════════════════════════
    TRIP CARD
    ════════════════════════════════════ */
-function TripCard({ trip, onEdit, onDelete }) {
+function TripCard({ trip, onEdit, onDelete, onPlanning }) {
   const n = nights(trip.startDate, trip.endDate);
 
   return (
@@ -122,6 +123,10 @@ function TripCard({ trip, onEdit, onDelete }) {
       )}
 
       <View style={s.cardActions}>
+        <TouchableOpacity style={[s.actionBtn, s.actionBtnPrimary]} onPress={() => onPlanning(trip)}>
+          <Ionicons name="calendar-outline" size={13} color={Colors.white} />
+          <Text style={[s.actionBtnText, { color: Colors.white }]}>Planning</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={s.actionBtn} onPress={() => onEdit(trip)}>
           <Ionicons name="pencil-outline" size={13} color={Colors.parme} />
           <Text style={s.actionBtnText}>Modifier</Text>
@@ -618,6 +623,7 @@ function TripFormModal({ visible, trip, onClose, onSaved }) {
 export default function TripsScreen() {
   const { user }   = useAuth();
   const { theme }  = useTheme();
+  const router     = useRouter();
   const insets     = useSafeAreaInsets();
   const tabBarH    = 64 + (insets.bottom || 16);
 
@@ -713,7 +719,8 @@ export default function TripsScreen() {
           data={trips}
           keyExtractor={t => String(t.id)}
           renderItem={({ item }) => (
-            <TripCard trip={item} onEdit={handleEdit} onDelete={handleDelete} />
+            <TripCard trip={item} onEdit={handleEdit} onDelete={handleDelete}
+              onPlanning={(t) => router.push(`/planning/${t.id}`)} />
           )}
           contentContainerStyle={{ padding: 16, paddingBottom: tabBarH + 16 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.parme} />}
@@ -811,6 +818,7 @@ const s = StyleSheet.create({
     paddingVertical: 5, paddingHorizontal: 10,
   },
   actionBtnDanger: { borderColor: '#fca5a5' },
+  actionBtnPrimary: { borderColor: Colors.parme, backgroundColor: Colors.parme },
   actionBtnText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 11, color: Colors.parme },
 });
 

@@ -11,6 +11,7 @@ const ProfilePage  = lazy(() => import('./pages/ProfilePage'));
 const MapPage         = lazy(() => import('./pages/MapPage'));
 const CommunityPage   = lazy(() => import('./pages/CommunityPage'));
 const TripsPage       = lazy(() => import('./pages/TripsPage'));
+const PlanningPage    = lazy(() => import('./pages/PlanningPage'));
 
 const Loader = () => (
   <div style={{ height: '100svh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fcf9f1' }}>
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/map"       element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
             <Route path="/community" element={<ProtectedRoute><CommunityPage /></ProtectedRoute>} />
             <Route path="/trips"     element={<ProtectedRoute><TripsPage /></ProtectedRoute>} />
+            <Route path="/trips/:id/planning" element={<ProtectedRoute><PlanningPage /></ProtectedRoute>} />
             <Route path="*"         element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

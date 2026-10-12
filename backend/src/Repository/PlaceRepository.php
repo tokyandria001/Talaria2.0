@@ -20,6 +20,7 @@ class PlaceRepository extends ServiceEntityRepository
         'sport'       => ['sport'],
         'gastronomie' => ['restaurant', 'bar'],
         'aventure'    => ['sport', 'visite'],
+        'plage'       => ['plage'],
     ];
 
     public function __construct(ManagerRegistry $registry)

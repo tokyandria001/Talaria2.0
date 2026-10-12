@@ -18,6 +18,17 @@ const BOOKING_TYPES = [
   { value: 'autre',    label: 'Autre',    icon: '🔗' },
 ];
 
+const ACCOM_TYPES = [
+  { value: 'hotel',  label: 'Hôtel',  icon: '🏨' },
+  { value: 'airbnb', label: 'Airbnb', icon: '🏠' },
+  { value: 'autre',  label: 'Autre',  icon: '🔗' },
+];
+
+const EMPTY_ACCOM = {
+  name: '', type: 'hotel', checkIn: '', checkOut: '',
+  price: '', hasSpecialPrice: false, specialPriceNote: '', link: '',
+};
+
 const fmtDate = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 const fmtEur  = (n) => n != null ? `${n.toLocaleString('fr-FR')} €` : '—';
 const nights  = (s, e) => Math.max(0, Math.round((new Date(e) - new Date(s)) / 86_400_000));
@@ -34,7 +45,160 @@ function computeFuel(distanceKm, fuelPrice, consumption) {
 }
 
 /* ════════════════════════════════════════
-   MODAL — 3 steps
+   LOGEMENTS (étape 4 du modal, voyage existant)
+   ════════════════════════════════════════ */
+function AccommodationsStep({ trip }) {
+  const [accommodations, setAccommodations] = useState([]);
+  const [form,           setForm]           = useState(EMPTY_ACCOM);
+  const [editingId,      setEditingId]      = useState(null);
+  const [saving,         setSaving]         = useState(false);
+  const [error,          setError]          = useState('');
+
+  useEffect(() => {
+    api.get(`/api/trips/${trip.id}/accommodations`)
+      .then(res => setAccommodations(res.data))
+      .catch(() => setAccommodations([]));
+  }, [trip.id]);
+
+  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+  const reset = () => { setForm(EMPTY_ACCOM); setEditingId(null); setError(''); };
+
+  const startEdit = (a) => {
+    setForm({
+      name: a.name, type: a.type, checkIn: a.checkIn, checkOut: a.checkOut,
+      price: a.price ?? '', hasSpecialPrice: a.hasSpecialPrice,
+      specialPriceNote: a.specialPriceNote ?? '', link: a.link ?? '',
+    });
+    setEditingId(a.id);
+    setError('');
+  };
+
+  const save = async () => {
+    if (!form.name.trim() || !form.checkIn || !form.checkOut) {
+      setError('Nom et dates sont requis.');
+      return;
+    }
+    setSaving(true); setError('');
+    try {
+      const payload = { ...form, price: form.price !== '' ? +form.price : null };
+      const res = editingId
+        ? await api.patch(`/api/trips/${trip.id}/accommodations/${editingId}`, payload)
+        : await api.post(`/api/trips/${trip.id}/accommodations`, payload);
+      setAccommodations(prev => {
+        const next = editingId ? prev.map(a => a.id === res.data.id ? res.data : a) : [...prev, res.data];
+        return [...next].sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+      });
+      reset();
+    } catch (err) {
+      setError(err.response?.data?.message || "Impossible d'enregistrer le logement.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (a) => {
+    if (!window.confirm(`Supprimer le logement « ${a.name} » ?`)) return;
+    try {
+      await api.delete(`/api/trips/${trip.id}/accommodations/${a.id}`);
+      setAccommodations(prev => prev.filter(x => x.id !== a.id));
+      if (editingId === a.id) reset();
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <>
+      {accommodations.length > 0 && (
+        <div className="accom-list">
+          {accommodations.map(a => (
+            <div key={a.id} className="accom-card">
+              <div className="accom-card-header">
+                <strong>{ACCOM_TYPES.find(t => t.value === a.type)?.icon} {a.name}</strong>
+                <div className="accom-card-actions">
+                  <button type="button" onClick={() => startEdit(a)}>Modifier</button>
+                  <button type="button" className="danger" onClick={() => remove(a)}>Supprimer</button>
+                </div>
+              </div>
+              <div className="accom-card-dates">
+                {fmtDate(a.checkIn)} → {fmtDate(a.checkOut)}
+                <span> ({nights(a.checkIn, a.checkOut)} nuit{nights(a.checkIn, a.checkOut) > 1 ? 's' : ''})</span>
+              </div>
+              <div className="accom-card-meta">
+                {a.price != null && <span>💰 {fmtEur(a.price)}</span>}
+                {a.hasSpecialPrice && <span className="accom-badge">🏷 {a.specialPriceNote || 'Prix spécial'}</span>}
+                {a.link && <a href={a.link} target="_blank" rel="noopener noreferrer">🔗 Lien</a>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="trip-field">
+        <label className="trip-label">{editingId ? 'Modifier le logement' : 'Ajouter un logement'}</label>
+        <input className="trip-input" placeholder="Nom (ex: Hôtel Roma)" value={form.name} onChange={set('name')} />
+      </div>
+
+      <div className="transport-pills">
+        {ACCOM_TYPES.map(t => (
+          <button key={t.value} type="button"
+            className={`transport-pill${form.type === t.value ? ' active' : ''}`}
+            onClick={() => setForm(f => ({ ...f, type: t.value }))}>
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="trip-row">
+        <div className="trip-field">
+          <label className="trip-label">Arrivée</label>
+          <input className="trip-input" type="date" min={trip.startDate} max={trip.endDate}
+            value={form.checkIn} onChange={set('checkIn')} />
+        </div>
+        <div className="trip-field">
+          <label className="trip-label">Départ</label>
+          <input className="trip-input" type="date" min={form.checkIn || trip.startDate} max={trip.endDate}
+            value={form.checkOut} onChange={set('checkOut')} />
+        </div>
+      </div>
+
+      <div className="trip-row">
+        <div className="trip-field">
+          <label className="trip-label">Prix <span>(€, optionnel)</span></label>
+          <input className="trip-input" type="number" min="0" placeholder="250" value={form.price} onChange={set('price')} />
+        </div>
+        <div className="trip-field">
+          <label className="trip-label">Lien <span>(Airbnb, Booking...)</span></label>
+          <input className="trip-input" placeholder="https://..." value={form.link} onChange={set('link')} />
+        </div>
+      </div>
+
+      <div className="trip-field">
+        <div className="trip-check-row">
+          <input type="checkbox" id="accom-special" checked={form.hasSpecialPrice} onChange={set('hasSpecialPrice')} />
+          <label htmlFor="accom-special" className="trip-check-label">Prix spécial (réduction CE, code promo...)</label>
+        </div>
+        {form.hasSpecialPrice && (
+          <input className="trip-input" placeholder="Ex: -20% code CE2026"
+            value={form.specialPriceNote} onChange={set('specialPriceNote')} />
+        )}
+      </div>
+
+      {error && <div className="trip-error">{error}</div>}
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        {editingId && (
+          <button type="button" className="btn btn-outline" style={{ padding: '10px 20px' }} onClick={reset}>Annuler</button>
+        )}
+        <button type="button" className="btn btn-primary" style={{ padding: '10px 20px', flex: 1 }}
+          disabled={saving} onClick={save}>
+          {saving ? 'Enregistrement...' : editingId ? 'Mettre à jour' : '+ Ajouter le logement'}
+        </button>
+      </div>
+    </>
+  );
+}
+
+/* ════════════════════════════════════════
+   MODAL — 4 steps
    ════════════════════════════════════════ */
 const EMPTY_FORM = {
   title: '', destination: '', departureCity: '',
@@ -130,6 +294,7 @@ function TripModal({ trip, onClose, onSaved }) {
               {step === 0 && 'Infos de base'}
               {step === 1 && 'Transport'}
               {step === 2 && 'Réservations'}
+              {step === 3 && 'Logements'}
             </p>
           </div>
           <button className="trip-modal-close" onClick={onClose}>✕</button>
@@ -137,7 +302,7 @@ function TripModal({ trip, onClose, onSaved }) {
 
         {/* Steps */}
         <div className="trip-steps">
-          {[0, 1, 2].map(i => (
+          {[0, 1, 2, 3].map(i => (
             <div key={i} className={`trip-step-dot ${i < step ? 'done' : i === step ? 'active' : ''}`} />
           ))}
         </div>
@@ -302,6 +467,16 @@ function TripModal({ trip, onClose, onSaved }) {
           </>
         )}
 
+        {/* ── Step 3 : logements ── */}
+        {step === 3 && (isEdit ? (
+          <AccommodationsStep trip={trip} />
+        ) : (
+          <div className="fuel-preview">
+            Créez d'abord le voyage, puis rouvrez-le avec « Modifier » pour ajouter ses logements
+            (road trip = plusieurs logements à des dates différentes).
+          </div>
+        ))}
+
         {error && <div className="trip-error">{error}</div>}
 
         {/* Footer */}
@@ -314,7 +489,7 @@ function TripModal({ trip, onClose, onSaved }) {
             {step === 0 ? 'Annuler' : '← Retour'}
           </button>
 
-          {step < 2 ? (
+          {step < 3 ? (
             <button
               className="btn btn-primary"
               style={{ padding: '10px 24px' }}
@@ -342,7 +517,7 @@ function TripModal({ trip, onClose, onSaved }) {
 /* ════════════════════════════════════════
    TRIP CARD
    ════════════════════════════════════════ */
-function TripCard({ trip, onEdit, onDelete }) {
+function TripCard({ trip, onEdit, onDelete, onPlanning }) {
   const n = nights(trip.startDate, trip.endDate);
 
   return (
@@ -442,6 +617,7 @@ function TripCard({ trip, onEdit, onDelete }) {
       )}
 
       <div className="trip-card-actions">
+        <button className="trip-action-btn primary" onClick={() => onPlanning(trip)}>📅 Planning</button>
         <button className="trip-action-btn" onClick={() => onEdit(trip)}>Modifier</button>
         <button className="trip-action-btn danger" onClick={() => onDelete(trip)}>Supprimer</button>
       </div>
@@ -561,6 +737,7 @@ export default function TripsPage() {
                 trip={t}
                 onEdit={setEditTrip}
                 onDelete={setDeleteTrip}
+                onPlanning={(trip) => navigate(`/trips/${trip.id}/planning`)}
               />
             ))}
           </div>
