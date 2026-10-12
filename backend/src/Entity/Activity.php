@@ -55,6 +55,10 @@ class Activity
     #[Assert\Choice(choices: self::SLOTS, message: 'Créneau invalide.')]
     private string $slot = 'matin';
 
+    /** Heure facultative (8:30, 19:30...) ; quand elle est renseignée, le créneau en est déduit */
+    #[ORM\Column(type: 'time_immutable', nullable: true)]
+    private ?\DateTimeImmutable $time = null;
+
     #[ORM\Column(length: 200)]
     #[Assert\NotBlank(message: 'Le titre de l\'activité est requis.')]
     #[Assert\Length(max: 200)]
@@ -128,8 +132,30 @@ class Activity
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
     /** Clé de tri chronologique : date puis créneau */
+    public function getTime(): ?\DateTimeImmutable { return $this->time; }
+
+    /** Fixe l'heure et en déduit le créneau (null : on garde le créneau actuel) */
+    public function setTime(?\DateTimeImmutable $v): static
+    {
+        $this->time = $v;
+        if ($v) $this->slot = self::slotForTime($v);
+        return $this;
+    }
+
+    public static function slotForTime(\DateTimeInterface $t): string
+    {
+        $hm = $t->format('H:i');
+        return match (true) {
+            $hm < '11:00' => 'matin',
+            $hm < '14:30' => 'midi',
+            $hm < '18:00' => 'apres-midi',
+            default       => 'soir',
+        };
+    }
+
+    /** Clé de tri chronologique : date, créneau, puis heure (activités sans heure en fin de créneau) */
     public function sortKey(): string
     {
-        return $this->date->format('Y-m-d') . '-' . array_search($this->slot, self::SLOTS, true);
+        return $this->date->format('Y-m-d') . '-' . array_search($this->slot, self::SLOTS, true) . '-' . ($this->time?->format('H:i') ?? '99:99');
     }
 }

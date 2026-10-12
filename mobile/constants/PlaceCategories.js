@@ -10,6 +10,8 @@ export const PLACE_CATEGORIES = [
   { value: 'plage',      label: 'Plage',      plural: 'Plages',      icon: 'umbrella',       color: '#1fa2c4', tags: ['plage'] },
   { value: 'activite',   label: 'Activité',   plural: 'Activités',   icon: 'bicycle',        color: '#4f203f', tags: ['activite', 'sport'] },
   { value: 'hotel',      label: 'Hôtel',      plural: 'Hôtels',      icon: 'bed',            color: '#3f6fd8', tags: ['hotel'] },
+  { value: 'auberge',    label: 'Auberge',    plural: 'Auberges',    icon: 'people',         color: '#5b8def', tags: ['auberge'] },
+  { value: 'camping',    label: 'Camping',    plural: 'Campings',    icon: 'bonfire',        color: '#2f9e5b', tags: ['camping'] },
   { value: 'nature',     label: 'Nature',     plural: 'Nature',      icon: 'leaf',           color: '#2f9e5b', tags: ['nature'] },
 ];
 

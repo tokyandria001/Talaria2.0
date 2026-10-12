@@ -22,6 +22,26 @@ trait ApiInputTrait
         return $date;
     }
 
+    /** Heure optionnelle au format HH:MM (null ou '' → null) */
+    private function parseTime(mixed $value): ?\DateTimeImmutable
+    {
+        if ($value === null || $value === '') return null;
+        if (!is_string($value) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $value)) {
+            throw new InvalidInputException('Heure invalide (format attendu : HH:MM).');
+        }
+        return \DateTimeImmutable::createFromFormat('!H:i', $value);
+    }
+
+    /** Montant en euros (12 / 12.5 / "12,50") converti en centimes ; vide ou invalide → 400 */
+    private function parseAmountCents(mixed $value, string $label = 'montant'): int
+    {
+        $normalized = is_string($value) ? str_replace([' ', ','], ['', '.'], $value) : $value;
+        if (!is_numeric($normalized)) {
+            throw new InvalidInputException(sprintf('%s invalide.', ucfirst($label)));
+        }
+        return (int) round((float) $normalized * 100);
+    }
+
     /** Entier optionnel : null ou '' → null ; texte non numérique → 400 */
     private function parseInt(mixed $value, string $label): ?int
     {

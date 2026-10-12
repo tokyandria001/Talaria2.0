@@ -47,6 +47,8 @@ export default function MapPage() {
   const [mapLoaded,    setMapLoaded]    = useState(false);
   const [is3D,         setIs3D]         = useState(false);
   const [places,       setPlaces]       = useState([]);
+  const [bbox,         setBbox]         = useState(null);   // zone visible : seuls ses lieux sont chargés
+  const [truncated,    setTruncated]    = useState(false);
   const [activeTags,   setActiveTags]   = useState([]);
   const [search,       setSearch]       = useState('');
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
@@ -73,7 +75,16 @@ export default function MapPage() {
       pitch: 0,
       bearing: 0,
       antialias: true,
+      // Lieux importés depuis OpenStreetMap : mention obligatoire (licence ODbL)
+      attributionControl: { customAttribution: '© les contributeurs OpenStreetMap' },
     });
+
+    // Zone visible → recharge des lieux (près de 100 000 en base : on ne charge que ce qu'on voit)
+    const updateBbox = () => {
+      const b = map.getBounds();
+      setBbox([b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(v => v.toFixed(4)).join(','));
+    };
+    map.on('moveend', updateBbox);
 
     map.on('load', () => {
       /* ── Terrain 3D (MapTiler DEM) ── */
@@ -137,6 +148,7 @@ export default function MapPage() {
       }
 
       setMapLoaded(true);
+      updateBbox();
     });
 
     /* Right-click → add place */
@@ -178,10 +190,12 @@ export default function MapPage() {
       const params = new URLSearchParams();
       if (activeTags.length) params.set('tags', activeTags.join(','));
       if (search)            params.set('search', search);
+      if (bbox)              params.set('bbox', bbox);
       const { data } = await api.get(`/api/places?${params}`);
       setPlaces(data.places);
+      setTruncated(!!data.truncated);
     } catch {/* silently fail if not authenticated yet */}
-  }, [activeTags, search]);
+  }, [activeTags, search, bbox]);
 
   useEffect(() => { fetchPlaces(); }, [fetchPlaces]);
 
@@ -428,6 +442,7 @@ export default function MapPage() {
 
           {/* MapLibre container */}
           <div ref={mapContainerRef} className="maplibre-container" />
+          {truncated && <div className="map-zoom-hint">Zoomez pour voir tous les lieux de la zone</div>}
 
           {/* Custom controls */}
           <div className="map-controls">

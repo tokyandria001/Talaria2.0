@@ -356,3 +356,9 @@
   color: var(--text-muted); transition: all 0.15s;
 }
 .modal-close:hover { border-color: var(--parme); color: var(--parme); }
+/* Zone trop chargée : seuls les lieux les plus populaires sont affichés */
+.map-zoom-hint {
+  position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 5;
+  background: rgba(30, 8, 22, 0.75); color: #fff; font-size: 13px; font-weight: 600;
+  padding: 6px 14px; border-radius: 100px; pointer-events: none;
+}

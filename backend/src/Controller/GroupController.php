@@ -396,7 +396,8 @@ class GroupController extends AbstractController
             // Chiffres de l'écran groupe (prochain voyage) ; « dépensé » arrive avec les dépenses (étape 4)
             'stats' => [
                 'budget'          => $next?->getBudget(),
-                'spent'           => null,
+                'spent'           => $next ? round((int) $this->em->createQuery('SELECT COALESCE(SUM(e.amountCents), 0) FROM App\Entity\Expense e WHERE e.trip = :t')
+                    ->setParameter('t', $next)->getSingleScalarResult() / 100, 2) : null,
                 'activitiesCount' => $next ? $this->em->getRepository(Activity::class)->count(['trip' => $next]) : 0,
             ],
             'activity' => $me->isActive() ? array_map(fn (GroupActivity $a) => [

@@ -152,6 +152,12 @@ class ActivityController extends AbstractController
         }
 
         if (array_key_exists('slot', $data))             $a->setSlot((string) $data['slot']);
+        if (array_key_exists('time', $data))             $a->setTime($this->parseTime($data['time']));
+        // Créneau changé sans nouvelle heure : l'ancienne heure ne correspond plus, on l'efface
+        if (array_key_exists('slot', $data) && !array_key_exists('time', $data)
+            && $a->getTime() && Activity::slotForTime($a->getTime()) !== $a->getSlot()) {
+            $a->setTime(null);
+        }
         if (array_key_exists('title', $data))            $a->setTitle(trim((string) $data['title']));
         if (array_key_exists('description', $data))      $a->setDescription($data['description'] ?: null);
         if (array_key_exists('category', $data))         $a->setCategory($data['category'] ?: null);
@@ -203,6 +209,7 @@ class ActivityController extends AbstractController
             'id'               => $a->getId(),
             'date'             => $a->getDate()->format('Y-m-d'),
             'slot'             => $a->getSlot(),
+            'time'             => $a->getTime()?->format('H:i'),
             'title'            => $a->getTitle(),
             'description'      => $a->getDescription(),
             'category'         => $a->getCategory(),
@@ -215,6 +222,8 @@ class ActivityController extends AbstractController
                 'name'      => $place->getName(),
                 'latitude'  => $place->getLatitude(),
                 'longitude' => $place->getLongitude(),
+                'address'   => $place->getAddress(),
+                'photo'     => $place->getPhotos()[0] ?? null,
             ] : null,
         ];
     }

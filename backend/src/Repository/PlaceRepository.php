@@ -28,16 +28,37 @@ class PlaceRepository extends ServiceEntityRepository
         parent::__construct($registry, Place::class);
     }
 
-    public function findByFilters(array $tags = [], string $search = '', array $bbox = [], ?User $recommendFor = null): array
+    /** Nombre de lieux renvoyés par défaut / au maximum (la carte charge la zone visible) */
+    public const DEFAULT_LIMIT = 300;
+    public const MAX_LIMIT = 500;
+
+    /**
+     * Lieux filtrés en base : catégorie principale (indexée), recherche, zone (indexée), limite.
+     * Les plus aimés d'abord ; avec $recommendFor, les plus pertinents pour l'utilisateur passent devant.
+     *
+     * @return Place[]
+     */
+    public function findByFilters(array $tags = [], string $search = '', array $bbox = [], ?User $recommendFor = null, int $limit = self::DEFAULT_LIMIT): array
     {
+        return $this->search($tags, $search, $bbox, $recommendFor, $limit)['places'];
+    }
+
+    /**
+     * Comme findByFilters, en indiquant s'il reste d'autres lieux au-delà de la limite.
+     *
+     * @return array{places: Place[], truncated: bool}
+     */
+    public function search(array $tags = [], string $search = '', array $bbox = [], ?User $recommendFor = null, int $limit = self::DEFAULT_LIMIT): array
+    {
+        $limit = max(1, min($limit, self::MAX_LIMIT));
         $qb = $this->createQueryBuilder('p');
 
         if ($search !== '') {
             $qb->andWhere('p.name LIKE :search OR p.description LIKE :search')
-               ->setParameter('search', '%' . $search . '%');
+               ->setParameter('search', '%' . addcslashes($search, '%_') . '%');
         }
 
-        if (!empty($bbox) && count($bbox) === 4) {
+        if (count($bbox) === 4) {
             [$lat1, $lng1, $lat2, $lng2] = array_map('floatval', $bbox);
             $qb->andWhere('p.latitude BETWEEN :lat1 AND :lat2')
                ->andWhere('p.longitude BETWEEN :lng1 AND :lng2')
@@ -47,16 +68,18 @@ class PlaceRepository extends ServiceEntityRepository
                ->setParameter('lng2', max($lng1, $lng2));
         }
 
-        $places = $qb->orderBy('p.createdAt', 'DESC')->addOrderBy('p.id', 'DESC')->getQuery()->getResult();
-
-        // Filter by tags in PHP (JSON array field) — un lieu matche s'il a au moins un des tags demandés
-        if (!empty($tags)) {
-            $places = array_filter($places, function (Place $p) use ($tags) {
-                return count(array_intersect($tags, $p->getTags())) > 0;
-            });
+        $tags = array_values(array_filter(array_map('strval', $tags)));
+        if ($tags) {
+            $qb->andWhere('p.primaryTag IN (:tags)')->setParameter('tags', $tags);
         }
 
-        $places = array_values($places);
+        // Un de plus que la limite pour savoir s'il en reste
+        $places = $qb->orderBy('p.likesCount', 'DESC')->addOrderBy('p.id', 'DESC')
+            ->setMaxResults($limit + 1)
+            ->getQuery()->getResult();
+
+        $truncated = count($places) > $limit;
+        $places = array_slice($places, 0, $limit);
 
         if ($recommendFor !== null) {
             $matchedPlaceTags = $this->matchedPlaceTagsFor($recommendFor);
@@ -65,7 +88,7 @@ class PlaceRepository extends ServiceEntityRepository
             });
         }
 
-        return $places;
+        return ['places' => $places, 'truncated' => $truncated];
     }
 
     /** Tags de lieux correspondant aux centres d'intérêt de l'utilisateur. */

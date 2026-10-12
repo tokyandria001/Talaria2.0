@@ -713,7 +713,15 @@ export default function TripsScreen() {
   const openCreate = (groupId = null) => router.push({ pathname: '/new-trip', params: groupId ? { groupId: String(groupId) } : {} });
 
   // Ancien lien « ?action=create » (menu +, écran groupe) : redirigé vers l'assistant
-  const { action, groupId } = useLocalSearchParams();
+  const { action, groupId, edit } = useLocalSearchParams();
+
+  // « Modifier » depuis l'écran du voyage : ouvre le formulaire de ce voyage une fois la liste chargée
+  useEffect(() => {
+    if (!edit || loading) return;
+    const target = trips.find(t => String(t.id) === String(edit));
+    router.setParams({ edit: undefined });
+    if (target) handleEdit(target);
+  }, [edit, loading, trips, router]);
   useEffect(() => {
     if (action === 'create') {
       router.setParams({ action: undefined, groupId: undefined });
@@ -771,7 +779,7 @@ export default function TripsScreen() {
           keyExtractor={t => String(t.id)}
           renderItem={({ item }) => (
             <TripCard trip={item} onEdit={handleEdit} onDelete={handleDelete}
-              onPlanning={(t) => router.push(`/planning/${t.id}`)} />
+              onPlanning={(t) => router.push(`/trip/${t.id}`)} />
           )}
           contentContainerStyle={{ padding: 16, paddingBottom: tabBarH + 16 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.parme} />}

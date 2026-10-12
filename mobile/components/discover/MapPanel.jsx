@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../../api/client';
 import { Colors } from '../../constants/Colors';
-import { categoryOf, priceLevel } from '../../constants/PlaceCategories';
+import { categoryOf, priceLevel, PLACE_CATEGORIES, FILTER_CATEGORIES } from '../../constants/PlaceCategories';
 import { comingSoon } from '../AuthUI';
 import MapFiltersSheet, { DEFAULT_FILTERS, applyFilters } from './MapFiltersSheet';
 import PlaceDetailSheet from './PlaceDetailSheet';
@@ -19,7 +19,13 @@ const SHORTCUTS = [
   { value: 'activites',    label: 'Activités',    icon: 'bicycle' },
   { value: 'destinations', label: 'Destinations', icon: 'earth' },
 ];
-const isHotel = (p) => (p.tags ?? []).includes('hotel');
+/** Tags envoyés au serveur pour les raccourcis Logements / Activités */
+const LODGING_TAGS = ['hotel', 'auberge', 'camping'];
+const ACTIVITY_TAGS = PLACE_CATEGORIES.flatMap(c => c.tags).filter(t => !LODGING_TAGS.includes(t));
+
+/** Zone visible de la carte → bbox « lat1,lng1,lat2,lng2 » de l'API */
+const toBbox = (r) => [r.latitude - r.latitudeDelta / 2, r.longitude - r.longitudeDelta / 2, r.latitude + r.latitudeDelta / 2, r.longitude + r.longitudeDelta / 2]
+  .map(v => v.toFixed(4)).join(',');
 
 const FRANCE = { latitude: 46.5, longitude: 2.5, latitudeDelta: 10, longitudeDelta: 10 };
 
@@ -28,6 +34,8 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
   const mapRef = useRef(null);
 
   const [places,     setPlaces]     = useState([]);
+  const [region,     setRegion]     = useState(FRANCE);
+  const [truncated,  setTruncated]  = useState(false);
   const [search,     setSearch]     = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [shortcut,   setShortcut]   = useState(null);
@@ -54,28 +62,35 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
     })();
   }, []);
 
-  // Lieux (recherche côté serveur, avec un léger délai pendant la frappe)
+  // Lieux de la zone visible uniquement (près de 100 000 lieux en base) : catégories filtrées par le serveur,
+  // rechargement quand la carte bouge, léger délai pendant la frappe et les déplacements
+  const serverTags = useMemo(() => {
+    const chosen = FILTER_CATEGORIES.filter(c => filters.categories.includes(c.value)).flatMap(c => c.tags);
+    if (shortcut === 'logements') return chosen.length ? chosen.filter(t => LODGING_TAGS.includes(t)) : LODGING_TAGS;
+    if (shortcut === 'activites') return chosen.length ? chosen.filter(t => ACTIVITY_TAGS.includes(t)) : ACTIVITY_TAGS;
+    return chosen;
+  }, [filters.categories, shortcut]);
+
   useEffect(() => {
     let cancelled = false;
     const id = setTimeout(() => {
-      client.get('/api/places', { params: search ? { search } : {} })
-        .then(({ data }) => { if (!cancelled) setPlaces(data.places ?? []); })
+      const params = { bbox: toBbox(region) };
+      if (search) params.search = search;
+      if (serverTags.length) params.tags = serverTags.join(',');
+      client.get('/api/places', { params })
+        .then(({ data }) => { if (!cancelled) { setPlaces(data.places ?? []); setTruncated(!!data.truncated); } })
         .catch(() => {});
-    }, search ? 300 : 0);
+    }, 350);
     return () => { cancelled = true; clearTimeout(id); };
-  }, [search]);
+  }, [search, region, serverTags]);
 
   // Ouverture de l'ajout de lieu depuis le bouton +
   useEffect(() => {
     if (autoAdd) { setAddCoords(null); onAutoAddHandled?.(); }
   }, [autoAdd, onAutoAddHandled]);
 
-  const visible = useMemo(() => {
-    let list = applyFilters(places, filters, userLoc);
-    if (shortcut === 'logements') list = list.filter(isHotel);
-    if (shortcut === 'activites') list = list.filter(p => !isHotel(p));
-    return list;
-  }, [places, filters, userLoc, shortcut]);
+  // Catégories déjà filtrées par le serveur ; ici le budget et la distance
+  const visible = useMemo(() => applyFilters(places, filters, userLoc), [places, filters, userLoc]);
 
   const activeFilterCount = filters.categories.length
     + (filters.budget[0] > DEFAULT_FILTERS.budget[0] || filters.budget[1] < DEFAULT_FILTERS.budget[1] ? 1 : 0)
@@ -120,6 +135,7 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
         provider={PROVIDER_DEFAULT}
         initialRegion={FRANCE}
         onLongPress={(e) => setAddCoords(e.nativeEvent.coordinate)}
+        onRegionChangeComplete={setRegion}
         onPress={() => setPreview(null)}
         showsUserLocation
         showsMyLocationButton={false}
@@ -166,6 +182,16 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
 
       {/* Aperçu du lieu sélectionné */}
       {preview && <PreviewCard place={preview} onClose={() => setPreview(null)} onOpen={() => setDetail(preview)} onLike={() => toggleLike(preview)} />}
+
+      {/* Trop de lieux dans la zone : on n'affiche que les plus populaires */}
+      {truncated && (
+        <View style={[s.zoomHint, { bottom: bottomOffset + 124 }]} pointerEvents="none">
+          <Text style={s.zoomHintText}>Zoomez pour voir tous les lieux de la zone</Text>
+        </View>
+      )}
+
+      {/* Mention obligatoire de la licence des données (ODbL) */}
+      <Text style={[s.attribution, { bottom: bottomOffset + 2 }]} pointerEvents="none">© les contributeurs OpenStreetMap</Text>
 
       {/* Bouton position */}
       <TouchableOpacity style={[s.locate, { bottom: bottomOffset + 70 }]} onPress={flyToUser}>
@@ -231,6 +257,9 @@ const shadow = { shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10, sha
 
 const s = StyleSheet.create({
   root: { flex: 1 },
+  zoomHint:     { position: 'absolute', alignSelf: 'center', backgroundColor: 'rgba(30,8,22,0.75)', borderRadius: 100, paddingHorizontal: 14, paddingVertical: 6 },
+  zoomHintText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.white },
+  attribution:  { position: 'absolute', left: 8, fontFamily: 'BricolageGrotesque_400Regular', fontSize: 9, color: 'rgba(30,8,22,0.6)' },
 
   top: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: 'rgba(252,249,241,0.92)', paddingBottom: 10 },
   shortcuts: { paddingHorizontal: 16, gap: 8 },

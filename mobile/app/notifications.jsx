@@ -19,8 +19,8 @@ function timeAgo(iso) {
   return `il y a ${Math.floor(h / 24)}j`;
 }
 
-const TYPE_ICON = { like: 'heart', comment: 'chatbubble', friend_request: 'person-add', friend_accept: 'people', group_invite: 'mail', group_join: 'people-circle', group_trip: 'airplane', trip_update: 'calendar' };
-const TYPE_COLOR = { like: '#ef4444', comment: Colors.parme, friend_request: Colors.parme, friend_accept: '#16a34a', group_invite: Colors.parme, group_join: '#16a34a', group_trip: Colors.parme, trip_update: Colors.parme };
+const TYPE_ICON = { like: 'heart', comment: 'chatbubble', friend_request: 'person-add', friend_accept: 'people', group_invite: 'mail', group_join: 'people-circle', group_trip: 'airplane', trip_update: 'calendar', expense: 'cash', settlement: 'swap-horizontal' };
+const TYPE_COLOR = { like: '#ef4444', comment: Colors.parme, friend_request: Colors.parme, friend_accept: '#16a34a', group_invite: Colors.parme, group_join: '#16a34a', group_trip: Colors.parme, trip_update: Colors.parme, expense: Colors.parme, settlement: '#16a34a' };
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -86,7 +86,7 @@ export default function NotificationsScreen() {
               onPress={() => {
                 markRead(item.id);
                 if (item.type?.startsWith('friend_')) router.push('/friends');
-                else if (item.trip) router.push(`/planning/${item.trip.id}`);
+                else if (item.trip) router.push(`/trip/${item.trip.id}`);
                 else if (item.group) router.push(`/groups/${item.group.id}`);
               }}
             >

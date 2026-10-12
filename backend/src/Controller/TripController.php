@@ -201,6 +201,10 @@ class TripController extends AbstractController
         return [
             'group'            => $group ? ['id' => $group->getId(), 'name' => $group->getName()] : null,
             'createdBy'        => UserPresenter::public($t->getUser()),
+            // Participants : membres actifs du groupe, ou le seul créateur pour un voyage perso
+            'participants'     => $group
+                ? array_map(fn ($m) => UserPresenter::public($m->getUser()), $group->activeMembers())
+                : [UserPresenter::public($t->getUser())],
             'permissions'      => ['canManage' => $this->access->canManage($t, $me)],
             'id'               => $t->getId(),
             'title'            => $t->getTitle(),

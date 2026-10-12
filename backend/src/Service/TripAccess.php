@@ -42,6 +42,14 @@ final class TripAccess
         return (bool) ($membership?->isActive() && $membership->isOwner());
     }
 
+    /** @return User[] participants du voyage : membres actifs du groupe, ou son seul créateur */
+    public function participants(Trip $trip): array
+    {
+        return $trip->getGroup()
+            ? array_map(fn ($m) => $m->getUser(), $trip->getGroup()->activeMembers())
+            : [$trip->getUser()];
+    }
+
     public function isActiveMember(TravelGroup $group, User $user): bool
     {
         return (bool) $group->membershipOf($user)?->isActive();

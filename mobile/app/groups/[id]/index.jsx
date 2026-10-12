@@ -100,11 +100,12 @@ export default function GroupScreen() {
         )}
 
         {!invited && (
-          <View style={s.stats}>
+          <TouchableOpacity style={s.stats} activeOpacity={0.85} disabled={!group.nextTrip}
+            onPress={() => router.push({ pathname: `/trip/${group.nextTrip.id}`, params: { tab: 'Budget' } })}>
             <Stat value={group.stats?.budget != null ? `${group.stats.budget.toLocaleString('fr-FR')} €` : '—'} label="Budget" />
             <Stat value={group.stats?.spent != null ? `${group.stats.spent.toLocaleString('fr-FR')} €` : '—'} label="Dépensé" />
             <Stat value={String(group.stats?.activitiesCount ?? 0)} label="Activités" />
-          </View>
+          </TouchableOpacity>
         )}
 
         {group.description ? <Text style={s.description}>{group.description}</Text> : null}
@@ -136,7 +137,7 @@ export default function GroupScreen() {
           <>
             <Text style={s.sectionTitle}>Prochain voyage</Text>
             {group.nextTrip ? (
-              <TripRow trip={group.nextTrip} highlight onPress={() => router.push(`/planning/${group.nextTrip.id}`)} />
+              <TripRow trip={group.nextTrip} highlight onPress={() => router.push(`/trip/${group.nextTrip.id}`)} />
             ) : (
               <View style={s.placeholder}>
                 <Ionicons name="airplane-outline" size={22} color={Colors.orchidee} />
@@ -149,7 +150,7 @@ export default function GroupScreen() {
                 <Text style={s.sectionTitle}>Autres voyages</Text>
                 <View style={{ gap: 8 }}>
                   {group.trips.filter(t => t.id !== group.nextTrip?.id).map(t => (
-                    <TripRow key={t.id} trip={t} onPress={() => router.push(`/planning/${t.id}`)} />
+                    <TripRow key={t.id} trip={t} onPress={() => router.push(`/trip/${t.id}`)} />
                   ))}
                 </View>
               </>
@@ -167,7 +168,7 @@ export default function GroupScreen() {
                 <View style={{ gap: 12 }}>
                   {group.activity.map(a => (
                     <TouchableOpacity key={a.id} style={s.event} disabled={!a.tripId}
-                      onPress={() => router.push(`/planning/${a.tripId}`)} activeOpacity={0.85}>
+                      onPress={() => router.push(`/trip/${a.tripId}`)} activeOpacity={0.85}>
                       <UserAvatar user={a.actor} size={36} />
                       <View style={{ flex: 1 }}>
                         <Text style={s.eventText}>{a.message}</Text>
@@ -252,7 +253,7 @@ function TripRow({ trip, highlight, onPress }) {
   );
 }
 
-const EVENT_LABEL = { trip_update: 'Planning', group_trip: 'Voyage', group_join: 'Membres', group_created: 'Groupe' };
+const EVENT_LABEL = { trip_update: 'Planning', group_trip: 'Voyage', group_join: 'Membres', group_created: 'Groupe', expense: 'Budget', settlement: 'Budget' };
 
 function timeAgo(isoDate) {
   const m = Math.floor((Date.now() - new Date(isoDate).getTime()) / 60000);

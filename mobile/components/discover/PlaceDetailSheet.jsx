@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useAuth } from '../../context/AuthContext';
 import BottomSheet, { Chip, SheetLabel } from '../BottomSheet';
 import { comingSoon } from '../AuthUI';
 import client from '../../api/client';
@@ -30,8 +32,28 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
   const [day,     setDay]     = useState(null);
   const [slot,    setSlot]    = useState('midi');
   const [saving,  setSaving]  = useState(false);
+  const [photos,  setPhotos]  = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const { user } = useAuth();
 
-  useEffect(() => { if (place) { setStep('detail'); setTrip(null); setDay(null); } }, [place]);
+  useEffect(() => { if (place) { setStep('detail'); setTrip(null); setDay(null); setPhotos(place.photos ?? []); } }, [place]);
+
+  /** Photo du lieu (créateur uniquement) : elle illustre aussi les activités liées dans les plannings */
+  const addPhoto = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [16, 9], quality: 0.7 });
+    if (res.canceled || !res.assets?.[0]) return;
+    const uri = res.assets[0].uri;
+    const ext = (uri.split('.').pop() || 'jpg').toLowerCase();
+    const form = new FormData();
+    form.append('photo', { uri, name: `lieu.${ext}`, type: `image/${ext === 'jpg' ? 'jpeg' : ext}` });
+    setUploading(true);
+    try {
+      const { data } = await client.post(`/api/places/${place.id}/photos`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setPhotos(data.place.photos);
+    } catch (err) {
+      Alert.alert('Erreur', err.response?.data?.message || "Impossible d'envoyer la photo.");
+    } finally { setUploading(false); }
+  };
 
   const openTripPicker = async () => {
     setStep('trip');
@@ -65,7 +87,8 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
   const cat = categoryOf(place);
   const level = priceLevel(place.averagePrice);
   const distance = userLoc ? distanceMeters(userLoc, place) : null;
-  const photo = place.photos?.[0];
+  const photo = photos[0];
+  const isCreator = !!user && place.createdBy?.id === user.id;
 
   return (
     <BottomSheet visible={!!place} title={step === 'detail' ? place.name : 'Ajouter au voyage'} onClose={onClose}>
@@ -77,6 +100,12 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
             <View style={[s.photo, s.photoEmpty, { backgroundColor: cat.color }]}>
               <Ionicons name={cat.icon} size={48} color="rgba(255,255,255,0.9)" />
             </View>
+          )}
+          {isCreator && photos.length < 8 && (
+            <TouchableOpacity style={s.addPhoto} onPress={addPhoto} disabled={uploading}>
+              <Ionicons name="camera-outline" size={15} color={Colors.parme} />
+              <Text style={s.addPhotoText}>{uploading ? 'Envoi...' : photos.length ? 'Ajouter une photo' : 'Ajouter la première photo'}</Text>
+            </TouchableOpacity>
           )}
 
           <View style={s.badges}>
@@ -96,9 +125,11 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
                 {[place.address, distance != null ? fmtDistance(distance) : null].filter(Boolean).join(' · ')}
               </InfoRow>
             )}
+            {place.openingHours ? <InfoRow icon="time-outline">{place.openingHours}</InfoRow> : null}
             {place.averagePrice != null && (
               <InfoRow icon="cash-outline">Prix moyen : {place.averagePrice} € par personne</InfoRow>
             )}
+            {place.source === 'osm' && <Text style={s.osm}>Données © les contributeurs OpenStreetMap</Text>}
           </View>
 
           <View style={s.actions}>
@@ -170,6 +201,8 @@ function InfoRow({ icon, children }) {
 const s = StyleSheet.create({
   photo:      { width: '100%', height: 170, borderRadius: 16, marginTop: 4 },
   photoEmpty: { alignItems: 'center', justifyContent: 'center' },
+  addPhoto:     { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 8 },
+  addPhotoText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.parme },
 
   badges: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
   badge: {
@@ -183,6 +216,7 @@ const s = StyleSheet.create({
 
   infos:    { gap: 8, marginTop: 14 },
   infoRow:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  osm:      { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 10, color: Colors.textMuted },
   infoText: { flex: 1, fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.text },
 
   actions: { flexDirection: 'row', gap: 10, marginTop: 20 },

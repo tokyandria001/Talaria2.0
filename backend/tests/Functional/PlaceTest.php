@@ -16,6 +16,7 @@ final class PlaceTest extends ApiTestCase
         ], $token);
         self::assertSame(201, $code);
         $place = $data['place'];
+        self::assertArrayNotHasKey('email', $place['createdBy'], 'Le créateur est public, son email ne doit jamais être exposé');
         self::assertSame('Av. Juárez 1000, Monterrey', $place['address']);
 
         $this->json('POST', '/api/places', ['name' => 'Bar', 'latitude' => 25.6, 'longitude' => -100.3, 'tags' => ['bar']], $token);

@@ -7,6 +7,10 @@ use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: PlaceRepository::class)]
+#[ORM\Index(name: 'idx_place_position', columns: ['latitude', 'longitude'])]
+#[ORM\Index(name: 'idx_place_primary_tag', columns: ['primary_tag'])]
+#[ORM\Index(name: 'idx_place_popularity', columns: ['likes_count', 'id'])]
+#[ORM\UniqueConstraint(name: 'uniq_place_external', columns: ['source', 'external_id'])]
 #[ORM\HasLifecycleCallbacks]
 class Place
 {
@@ -29,6 +33,21 @@ class Place
     #[Assert\Count(max: 10, maxMessage: '10 catégories maximum.')]
     #[Assert\All([new Assert\Type('string'), new Assert\Length(max: 30)])]
     private array $tags = [];
+
+    /** Catégorie principale (premier tag), indexée pour filtrer la carte en base de données */
+    #[ORM\Column(length: 30, nullable: true)]
+    private ?string $primaryTag = null;
+
+    /** Origine d'un lieu importé (ex. « osm ») et son identifiant d'origine : réimport sans doublon */
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $source = null;
+
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $externalId = null;
+
+    /** Horaires au format OpenStreetMap (ex. « Mo-Sa 17:00-02:00 ») */
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $openingHours = null;
 
     #[ORM\Column(nullable: true)]
     #[Assert\PositiveOrZero(message: 'Le prix moyen ne peut pas être négatif.')]
@@ -74,7 +93,23 @@ class Place
     public function setDescription(?string $description): static { $this->description = $description; return $this; }
 
     public function getTags(): array { return $this->tags; }
-    public function setTags(array $tags): static { $this->tags = $tags; return $this; }
+    public function setTags(array $tags): static
+    {
+        $this->tags = array_values($tags);
+        $this->primaryTag = $this->tags[0] ?? null;
+        return $this;
+    }
+
+    public function getPrimaryTag(): ?string { return $this->primaryTag; }
+
+    public function getSource(): ?string { return $this->source; }
+    public function setSource(?string $v): static { $this->source = $v; return $this; }
+
+    public function getExternalId(): ?string { return $this->externalId; }
+    public function setExternalId(?string $v): static { $this->externalId = $v; return $this; }
+
+    public function getOpeningHours(): ?string { return $this->openingHours; }
+    public function setOpeningHours(?string $v): static { $this->openingHours = $v; return $this; }
 
     public function getAveragePrice(): ?int { return $this->averagePrice; }
     public function setAveragePrice(?int $averagePrice): static { $this->averagePrice = $averagePrice; return $this; }

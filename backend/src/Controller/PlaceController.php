@@ -6,6 +6,8 @@ use App\Entity\Place;
 use App\Entity\PlaceLike;
 use App\Entity\User;
 use App\Repository\PlaceRepository;
+use App\Service\ImageUploader;
+use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -34,7 +36,10 @@ class PlaceController extends AbstractController
             $search      = $request->query->get('search', '');
             $bbox        = $request->query->get('bbox') ? explode(',', $request->query->get('bbox')) : [];
             $recommended = $request->query->get('recommended') === 'true';
-            $places      = $repo->findByFilters($tags, $search, $bbox, $recommended ? $me : null);
+            $limit       = (int) $request->query->get('limit', PlaceRepository::DEFAULT_LIMIT);
+            $result      = $repo->search($tags, $search, $bbox, $recommended ? $me : null, $limit);
+            $places      = $result['places'];
+            $truncated   = $result['truncated'];
         }
 
         $likedIds = [];
@@ -46,7 +51,9 @@ class PlaceController extends AbstractController
         }
 
         return $this->json([
-            'places' => array_map(fn(Place $p) => $this->serialize($p, $likedIds), $places),
+            'places'    => array_map(fn(Place $p) => $this->serialize($p, $likedIds), $places),
+            // true : la zone contient d'autres lieux (zoomer ou filtrer pour les voir)
+            'truncated' => $truncated ?? false,
         ]);
     }
 
@@ -122,13 +129,49 @@ class PlaceController extends AbstractController
         return $this->json(['place' => $this->serialize($place)], 201);
     }
 
+    /* ── Photos du lieu (créateur du lieu, 8 maximum) ── */
+    #[Route('/{id}/photos', name: 'photo_add', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function addPhoto(Place $place, Request $request, EntityManagerInterface $em, ImageUploader $uploader): JsonResponse
+    {
+        if ($place->getCreatedBy() !== $this->getUser()) {
+            return $this->json(['message' => 'Seul le créateur du lieu peut ajouter des photos.'], 403);
+        }
+        if (count($place->getPhotos()) >= 8) {
+            return $this->json(['message' => '8 photos maximum par lieu.'], 422);
+        }
+
+        $path = $uploader->upload($request->files->get('photo'), 'places', (string) $place->getId());
+        $place->setPhotos([...$place->getPhotos(), $path]);
+        $em->flush();
+
+        return $this->json(['place' => $this->serialize($place)], 201);
+    }
+
+    #[Route('/{id}/photos/{index}', name: 'photo_delete', methods: ['DELETE'], requirements: ['id' => '\d+', 'index' => '\d+'])]
+    public function deletePhoto(Place $place, int $index, EntityManagerInterface $em, ImageUploader $uploader): JsonResponse
+    {
+        if ($place->getCreatedBy() !== $this->getUser()) {
+            return $this->json(['message' => 'Seul le créateur du lieu peut supprimer ses photos.'], 403);
+        }
+        $photos = $place->getPhotos();
+        if (!isset($photos[$index])) return $this->json(['message' => 'Photo introuvable.'], 404);
+
+        $uploader->remove($photos[$index]);
+        array_splice($photos, $index, 1);
+        $place->setPhotos($photos);
+        $em->flush();
+
+        return $this->json(['place' => $this->serialize($place)]);
+    }
+
     #[Route('/{id}', name: 'delete', methods: ['DELETE'])]
-    public function delete(Place $place, EntityManagerInterface $em): JsonResponse
+    public function delete(Place $place, EntityManagerInterface $em, ImageUploader $uploader): JsonResponse
     {
         if ($place->getCreatedBy() !== $this->getUser()) {
             return $this->json(['message' => 'Interdit.'], 403);
         }
 
+        foreach ($place->getPhotos() as $photo) $uploader->remove($photo);
         $em->remove($place);
         $em->flush();
 
@@ -145,12 +188,14 @@ class PlaceController extends AbstractController
             'tags'         => $place->getTags(),
             'averagePrice' => $place->getAveragePrice(),
             'address'      => $place->getAddress(),
+            'openingHours' => $place->getOpeningHours(),
+            'source'       => $place->getSource(),
             'latitude'     => $place->getLatitude(),
             'longitude'    => $place->getLongitude(),
             'photos'       => $place->getPhotos(),
             'likesCount'   => $place->getLikesCount(),
             'liked'        => isset($likedIds[$place->getId()]),
-            'createdBy'    => $user ? ['id' => $user->getId(), 'email' => $user->getEmail()] : null,
+            'createdBy'    => $user ? UserPresenter::public($user) : null, // jamais l'email
             'createdAt'    => $place->getCreatedAt()?->format(\DateTimeInterface::ATOM),
         ];
     }

@@ -50,7 +50,9 @@ abstract class ApiTestCase extends WebTestCase
     /** Crée un compte, se connecte et renvoie le token JWT */
     protected function registerAndLogin(string $email = 'voyageur@talaria.test', string $password = 'motdepasse123'): string
     {
-        [$code] = $this->json('POST', '/api/auth/register', ['email' => $email, 'password' => $password]);
+        // Une adresse IP simulée par compte : la limite de 5 inscriptions/heure/IP ne gêne pas les tests à plusieurs comptes
+        $ip = '10.0.' . (crc32($email) % 250) . '.' . (crc32(strrev($email)) % 250 + 1);
+        [$code] = $this->json('POST', '/api/auth/register', ['email' => $email, 'password' => $password], null, $ip);
         self::assertSame(201, $code, 'Inscription impossible');
 
         [$code, $data] = $this->json('POST', '/api/auth/login', ['username' => $email, 'password' => $password]);

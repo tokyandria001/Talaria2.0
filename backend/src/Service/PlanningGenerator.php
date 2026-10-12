@@ -167,6 +167,7 @@ class PlanningGenerator
             ->setTrip($trip)
             ->setDate($day)
             ->setSlot($slot)
+            ->setTime(\DateTimeImmutable::createFromFormat('!H:i', $slot === 'midi' ? '12:30' : '09:00'))
             ->setIsAuto(true);
 
         if ($place) {

@@ -7,6 +7,7 @@ use App\Entity\ArticleLike;
 use App\Entity\Comment;
 use App\Entity\Notification;
 use App\Entity\User;
+use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -183,7 +184,7 @@ class ArticleController extends AbstractController
 
             // Notification au propriétaire (pas à soi-même)
             if ($article->getAuthor()->getId() !== $me->getId()) {
-                $fromName = trim(($me->getFirstName() ?? '') . ' ' . ($me->getLastName() ?? '')) ?: $me->getEmail();
+                $fromName = UserPresenter::public($me)['displayName']; // jamais l'email
                 $notif = (new Notification())
                     ->setRecipient($article->getAuthor())
                     ->setFromUser($me)
@@ -226,7 +227,7 @@ class ArticleController extends AbstractController
 
         // Notification au propriétaire (pas à soi-même)
         if ($article->getAuthor()->getId() !== $me->getId()) {
-            $fromName = trim(($me->getFirstName() ?? '') . ' ' . ($me->getLastName() ?? '')) ?: $me->getEmail();
+            $fromName = UserPresenter::public($me)['displayName']; // jamais l'email
             $notif = (new Notification())
                 ->setRecipient($article->getAuthor())
                 ->setFromUser($me)

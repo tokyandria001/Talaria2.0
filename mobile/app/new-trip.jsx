@@ -146,7 +146,7 @@ export default function NewTripScreen() {
       }
 
       const code = createdGroup?.inviteCode ?? group?.inviteCode;
-      router.replace(`/planning/${trip.id}`);
+      router.replace(`/trip/${trip.id}`);
       if (code) {
         Alert.alert('Voyage créé 🎉', createdGroup
           ? `Le groupe « ${createdGroup.name} » a été créé et tes amis sont invités. Tu peux aussi partager le code ${code}.`
