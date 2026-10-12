@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
   Modal, Alert, Switch, ActivityIndicator, RefreshControl,
@@ -32,6 +32,23 @@ const EMPTY_ACTIVITY = {
   hasSpecialPrice: false, specialPriceNote: '',
 };
 
+/** Tags pour lesquels on propose les établissements de la carte autour de la destination */
+const VENUE_TAGS = ['restaurant', 'bar'];
+
+/** Zone de recherche autour de la destination (~25 km), au format bbox de /api/places */
+const RADIUS_DEG = 0.25;
+
+/** Coordonnées de la destination (null si introuvable). Android exige la permission de localisation. */
+async function geocode(destination) {
+  try {
+    await Location.requestForegroundPermissionsAsync();
+    const [geo] = await Location.geocodeAsync(destination);
+    return geo ? { lat: geo.latitude, lng: geo.longitude } : null;
+  } catch {
+    return null;
+  }
+}
+
 const fmtEur = (n) => `${(n ?? 0).toLocaleString('fr-FR')} €`;
 const catIcon = (v) => CATEGORIES.find(c => c.value === v)?.icon ?? '📍';
 
@@ -60,7 +77,8 @@ function ActivityCard({ activity, onEdit, onDelete }) {
         <Text style={s.activityTitle}>{activity.title}</Text>
         {activity.description ? <Text style={s.activityDesc} numberOfLines={2}>{activity.description}</Text> : null}
         <View style={s.activityMeta}>
-          {activity.price != null && <Text style={s.activityPrice}>💰 {fmtEur(activity.price)}</Text>}
+          {activity.price != null && <Text style={s.activityPrice}>💰 {fmtEur(activity.price)} / pers.</Text>}
+          {activity.place && <Text style={s.activityPrice}>📍 Lieu de la carte</Text>}
           {activity.hasSpecialPrice && (
             <Text style={s.badge}>🏷 {activity.specialPriceNote || 'Prix spécial'}</Text>
           )}
@@ -77,19 +95,22 @@ function ActivityCard({ activity, onEdit, onDelete }) {
 /* ════════════════════════════════════
    CREATE / EDIT MODAL
    ════════════════════════════════════ */
-function ActivityFormModal({ visible, tripId, days, initial, onClose, onSaved }) {
+function ActivityFormModal({ visible, tripId, days, initial, priceDefaults, getCoords, onClose, onSaved }) {
   const isEdit = !!initial?.id;
   const [form,    setForm]    = useState(EMPTY_ACTIVITY);
   const [date,    setDate]    = useState('');
   const [slot,    setSlot]    = useState('matin');
+  const [place,   setPlace]   = useState(null);
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
+  const [venues,  setVenues]  = useState({ category: null, places: [] });
 
   useEffect(() => {
     if (!visible || !initial) return;
     setError('');
     setDate(initial.date);
     setSlot(initial.slot);
+    setPlace(initial.place ?? null);
     setForm({
       title:            initial.title            ?? '',
       description:      initial.description      ?? '',
@@ -102,6 +123,49 @@ function ActivityFormModal({ visible, tripId, days, initial, onClose, onSaved })
 
   const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
 
+  /* Changer de type pré-remplit le prix moyen du tag, sauf si l'utilisateur a saisi son propre prix */
+  const selectCategory = (value) => setForm(f => {
+    const category = f.category === value ? '' : value;
+    const priceIsDefault = f.price === '' || parseInt(f.price) === priceDefaults[f.category];
+    const nextDefault = priceDefaults[category];
+    return {
+      ...f,
+      category,
+      price: priceIsDefault && !place ? (nextDefault != null ? String(nextDefault) : '') : f.price,
+    };
+  });
+
+  /* Restos / bars : établissements de la carte autour de la destination */
+  const isVenue = VENUE_TAGS.includes(form.category);
+  const venuesLoading = isVenue && venues.category !== form.category;
+  useEffect(() => {
+    if (!visible || !VENUE_TAGS.includes(form.category)) return;
+    let cancelled = false;
+    const category = form.category;
+    getCoords()
+      .then(coords => {
+        if (!coords) return [];
+        const bbox = [coords.lat - RADIUS_DEG, coords.lng - RADIUS_DEG, coords.lat + RADIUS_DEG, coords.lng + RADIUS_DEG].join(',');
+        return client.get('/api/places', { params: { tags: category, bbox, recommended: true } }).then(res => res.data.places);
+      })
+      .catch(() => [])
+      .then(places => !cancelled && setVenues({ category, places }));
+    return () => { cancelled = true; };
+  }, [visible, form.category, getCoords]);
+
+  const pickVenue = (p) => {
+    setPlace({ id: p.id, name: p.name });
+    setForm(f => {
+      const price = p.averagePrice ?? priceDefaults[f.category];
+      return {
+        ...f,
+        title: p.name,
+        description: f.description || p.description || '',
+        price: price != null ? String(price) : '',
+      };
+    });
+  };
+
   const handleSave = async () => {
     if (!form.title.trim()) { setError('Donnez un titre à l\'activité.'); return; }
     setError(''); setSaving(true);
@@ -109,6 +173,7 @@ function ActivityFormModal({ visible, tripId, days, initial, onClose, onSaved })
       const payload = {
         ...form,
         date, slot,
+        placeId: place?.id ?? null,
         price: form.price !== '' ? parseInt(form.price) : null,
       };
       const res = isEdit
@@ -163,15 +228,51 @@ function ActivityFormModal({ visible, tripId, days, initial, onClose, onSaved })
           <View style={ms.pills}>
             {CATEGORIES.map(c => (
               <TouchableOpacity key={c.value} style={[ms.pill, form.category === c.value && ms.pillActive]}
-                onPress={() => set('category')(form.category === c.value ? '' : c.value)}>
+                onPress={() => selectCategory(c.value)}>
                 <Text style={[ms.pillText, form.category === c.value && ms.pillTextActive]}>{c.icon} {c.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={ms.label}>Prix (€, optionnel)</Text>
+          {isVenue && (
+            <>
+              <Text style={ms.label}>{form.category === 'bar' ? 'Bars' : 'Restaurants'} à proximité</Text>
+              {venuesLoading ? (
+                <ActivityIndicator color={Colors.parme} style={{ alignSelf: 'flex-start', marginBottom: 12 }} />
+              ) : venues.places.length === 0 ? (
+                <Text style={ms.hint}>Aucun lieu de ce type sur la carte autour de la destination — saisissez-le librement.</Text>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                  {venues.places.slice(0, 8).map(p => (
+                    <TouchableOpacity key={p.id} style={[ms.venue, place?.id === p.id && ms.pillActive]} onPress={() => pickVenue(p)}>
+                      <Text style={ms.venueName} numberOfLines={1}>{p.name}</Text>
+                      <Text style={ms.venueMeta}>
+                        {p.averagePrice != null ? `~${fmtEur(p.averagePrice)}` : 'prix moyen'} · ❤️ {p.likesCount}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </>
+          )}
+
+          {place && (
+            <View style={ms.linkedPlace}>
+              <Text style={ms.linkedPlaceText} numberOfLines={1}>📍 Lieu de la carte : {place.name}</Text>
+              <TouchableOpacity onPress={() => setPlace(null)}>
+                <Text style={ms.linkedPlaceBtn}>Détacher</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <Text style={ms.label}>Prix par personne (€, optionnel)</Text>
           <TextInput style={ms.input} placeholder="25" placeholderTextColor={Colors.textMuted}
             keyboardType="number-pad" value={form.price} onChangeText={set('price')} />
+          {priceDefaults[form.category] != null && (
+            <Text style={ms.hint}>
+              Prix moyen {CATEGORIES.find(c => c.value === form.category)?.label.toLowerCase()} : {fmtEur(priceDefaults[form.category])} / pers. — modifiable
+            </Text>
+          )}
 
           <View style={ms.checkRow}>
             <Switch value={form.hasSpecialPrice} onValueChange={set('hasSpecialPrice')}
@@ -220,17 +321,20 @@ export default function PlanningScreen() {
   const [generating,     setGenerating]     = useState(false);
   const [selectedDay,    setSelectedDay]    = useState(null);
   const [modalInitial,   setModalInitial]   = useState(null);
+  const [priceDefaults,  setPriceDefaults]  = useState({});
 
   const fetchAll = useCallback(async () => {
     try {
-      const [t, a, acc] = await Promise.all([
+      const [t, a, acc, defaults] = await Promise.all([
         client.get(`/api/trips/${id}`),
         client.get(`/api/trips/${id}/activities`),
         client.get(`/api/trips/${id}/accommodations`),
+        client.get('/api/price-defaults'),
       ]);
       setTrip(t.data);
       setActivities(a.data);
       setAccommodations(acc.data);
+      setPriceDefaults(defaults.data);
     } catch {
       Alert.alert('Erreur', 'Impossible de charger le planning.');
     } finally {
@@ -253,27 +357,37 @@ export default function PlanningScreen() {
     return m;
   }, [activities]);
 
-  /* Budget : transport + logements + activités, comparé au budget prévu (peut devenir négatif) */
+  /*
+   * Budget. Les prix d'activités sont par personne ; logements et transport sont des totaux.
+   * Budget du groupe = activités × voyageurs + logements + transport, comparé au budget prévu
+   * (peut devenir négatif). Budget individuel = part de chacun.
+   */
   const costs = useMemo(() => {
-    const act   = activities.reduce((sum, a) => sum + (a.price ?? 0), 0);
-    const accom = accommodations.reduce((sum, a) => sum + (a.price ?? 0), 0);
-    const trans = trip?.computedTotalCost ?? 0;
-    return { act, accom, trans, total: act + accom + trans };
+    const travelers = Math.max(1, trip?.travelers ?? 1);
+    const isFood = (a) => VENUE_TAGS.includes(a.category);
+    const food   = activities.filter(isFood).reduce((sum, a) => sum + (a.price ?? 0), 0);
+    const other  = activities.filter(a => !isFood(a)).reduce((sum, a) => sum + (a.price ?? 0), 0);
+    const accom  = accommodations.reduce((sum, a) => sum + (a.price ?? 0), 0);
+    const trans  = trip?.computedTotalCost ?? 0;
+    const group  = (food + other) * travelers + accom + trans;
+    return { travelers, food, other, accom, trans, group, perPerson: Math.round(group / travelers) };
   }, [activities, accommodations, trip]);
 
-  const remaining = trip?.budget != null ? trip.budget - costs.total : null;
+  const remaining = trip?.budget != null ? trip.budget - costs.group : null;
+
+  /* Coordonnées de la destination, géocodées une seule fois par écran */
+  const coordsRef = useRef(null);
+  const destination = trip?.destination;
+  const getCoords = useCallback(() => {
+    if (!coordsRef.current) coordsRef.current = geocode(destination);
+    return coordsRef.current;
+  }, [destination]);
 
   const runGenerate = async (replaceAuto) => {
     setGenerating(true);
     try {
       // Coordonnées de la destination pour proposer des lieux de la carte à proximité
-      let coords = {};
-      try {
-        // Android exige la permission de localisation pour le géocodage
-        await Location.requestForegroundPermissionsAsync();
-        const [geo] = await Location.geocodeAsync(trip.destination);
-        if (geo) coords = { lat: geo.latitude, lng: geo.longitude };
-      } catch {}
+      const coords = await getCoords();
 
       const { data } = await client.post(`/api/trips/${id}/activities/generate`, { ...coords, replaceAuto });
       setActivities(data.activities);
@@ -354,13 +468,27 @@ export default function PlanningScreen() {
       >
         {/* Budget */}
         <View style={s.budgetBox}>
-          <View style={s.costRow}><Text style={s.costLabel}>🎯 Activités</Text><Text style={s.costVal}>{fmtEur(costs.act)}</Text></View>
+          <Text style={s.budgetCaption}>Par personne</Text>
+          <View style={s.costRow}><Text style={s.costLabel}>🎯 Activités</Text><Text style={s.costVal}>{fmtEur(costs.other)}</Text></View>
+          <View style={s.costRow}><Text style={s.costLabel}>🍽 Restos & bars</Text><Text style={s.costVal}>{fmtEur(costs.food)}</Text></View>
+
+          <Text style={s.budgetCaption}>Groupe · {costs.travelers} voyageur{costs.travelers > 1 ? 's' : ''}</Text>
+          <View style={s.costRow}>
+            <Text style={s.costLabel}>Activités, restos & bars (× {costs.travelers})</Text>
+            <Text style={s.costVal}>{fmtEur((costs.other + costs.food) * costs.travelers)}</Text>
+          </View>
           <View style={s.costRow}><Text style={s.costLabel}>🏨 Logements</Text><Text style={s.costVal}>{fmtEur(costs.accom)}</Text></View>
           <View style={s.costRow}><Text style={s.costLabel}>🚗 Transport</Text><Text style={s.costVal}>{fmtEur(costs.trans)}</Text></View>
           <View style={[s.costRow, s.costTotal]}>
-            <Text style={[s.costLabel, s.costLabelBold]}>Total estimé</Text>
-            <Text style={[s.costVal, { color: Colors.parme }]}>{fmtEur(costs.total)}</Text>
+            <Text style={[s.costLabel, s.costLabelBold]}>Total du groupe</Text>
+            <Text style={[s.costVal, { color: Colors.parme }]}>{fmtEur(costs.group)}</Text>
           </View>
+          {costs.travelers > 1 && (
+            <View style={s.costRow}>
+              <Text style={s.costLabel}>Soit par personne</Text>
+              <Text style={s.costVal}>{fmtEur(costs.perPerson)}</Text>
+            </View>
+          )}
           {remaining != null && (
             <View style={s.costRow}>
               <Text style={s.costLabel}>Budget restant (sur {fmtEur(trip.budget)})</Text>
@@ -395,6 +523,7 @@ export default function PlanningScreen() {
         {/* Journée sélectionnée */}
         <Text style={[s.dayTitle, { color: theme.text }]}>
           Jour {dayIndex + 1} — {fmtDay(selectedDay, { weekday: 'long', day: 'numeric', month: 'long' })}
+          <Text style={s.dayTotal}>{'  '}{fmtEur(dayActivities.reduce((sum, a) => sum + (a.price ?? 0), 0))} / pers.</Text>
         </Text>
 
         {SLOTS.map(sl => {
@@ -422,6 +551,8 @@ export default function PlanningScreen() {
         tripId={id}
         days={days}
         initial={modalInitial}
+        priceDefaults={priceDefaults}
+        getCoords={getCoords}
         onClose={() => setModalInitial(null)}
         onSaved={handleSaved}
       />
@@ -506,6 +637,12 @@ const s = StyleSheet.create({
     overflow: 'hidden',
   },
   badgeAuto: { backgroundColor: Colors.sableOr },
+
+  budgetCaption: {
+    fontFamily: 'BricolageGrotesque_700Bold', fontSize: 10, color: Colors.textMuted,
+    textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4,
+  },
+  dayTotal: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.textMuted, textTransform: 'none' },
 });
 
 const ms = StyleSheet.create({
@@ -536,6 +673,22 @@ const ms = StyleSheet.create({
   pillTextActive: { color: Colors.parme },
 
   checkRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+
+  hint: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: Colors.textMuted, marginTop: -4, marginBottom: 12 },
+
+  venue: {
+    borderWidth: 1.5, borderColor: Colors.border, borderRadius: 12,
+    paddingVertical: 8, paddingHorizontal: 12, marginRight: 8, maxWidth: 180,
+  },
+  venueName: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 13, color: Colors.text },
+  venueMeta: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: Colors.textMuted, marginTop: 2 },
+
+  linkedPlace: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.sableLune, borderRadius: 10, padding: 10, marginBottom: 12,
+  },
+  linkedPlaceText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.text, flex: 1 },
+  linkedPlaceBtn:  { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 12, color: Colors.parme },
   checkLabel: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.text, flex: 1 },
 
   errorBox:  { backgroundColor: '#fef2f2', borderRadius: 10, padding: 12, marginTop: 8 },

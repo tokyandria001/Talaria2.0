@@ -14,6 +14,21 @@ class Activity
     /** Créneaux d'une journée, dans l'ordre chronologique */
     public const SLOTS = ['matin', 'midi', 'apres-midi', 'soir'];
 
+    /** Prix moyen prédéfini par personne (€), par tag — modifiable librement sur chaque activité */
+    public const DEFAULT_PRICES = [
+        'restaurant' => 25,
+        'bar'        => 12,
+        'visite'     => 15,
+        'culture'    => 12,
+        'sport'      => 30,
+        'plage'      => 0,
+    ];
+
+    public static function defaultPriceFor(?string $category): ?int
+    {
+        return self::DEFAULT_PRICES[$category] ?? null;
+    }
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -47,6 +62,7 @@ class Activity
     #[ORM\Column(length: 30, nullable: true)]
     private ?string $category = null;
 
+    /** Prix par personne (€) */
     #[ORM\Column(nullable: true)]
     #[Assert\PositiveOrZero(message: 'Le prix doit être positif.')]
     private ?int $price = null;

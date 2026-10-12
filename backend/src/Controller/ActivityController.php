@@ -62,6 +62,11 @@ class ActivityController extends AbstractController
         $activity = (new Activity())->setTrip($trip)->setTitle('');
         if ($error = $this->apply($activity, $data)) return $error;
 
+        // Sans prix fourni : prix moyen prédéfini du tag (lieu de la carte en priorité)
+        if (!array_key_exists('price', $data)) {
+            $activity->setPrice($activity->getPlace()?->getAveragePrice() ?? Activity::defaultPriceFor($activity->getCategory()));
+        }
+
         $errors = $validator->validate($activity);
         if (count($errors) > 0) return $this->validationError($errors);
 

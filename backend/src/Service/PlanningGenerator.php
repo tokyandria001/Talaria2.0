@@ -144,14 +144,15 @@ class PlanningGenerator
             ->setIsAuto(true);
 
         if ($place) {
+            $placeCategory = $place->getTags()[0] ?? $category;
             $activity
                 ->setPlace($place)
                 ->setTitle($place->getName())
                 ->setDescription($place->getDescription())
-                ->setCategory($place->getTags()[0] ?? $category)
-                ->setPrice($place->getAveragePrice());
+                ->setCategory($placeCategory)
+                ->setPrice($place->getAveragePrice() ?? Activity::defaultPriceFor($placeCategory));
         } else {
-            $activity->setTitle($title)->setCategory($category);
+            $activity->setTitle($title)->setCategory($category)->setPrice(Activity::defaultPriceFor($category));
         }
 
         $this->em->persist($activity);

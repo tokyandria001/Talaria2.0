@@ -99,3 +99,35 @@
   .planning-layout { grid-template-columns: 1fr; }
   .planning-side { position: static; }
 }
+
+/* ── Budget individuel / groupe ────────── */
+.planning-budget-caption {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted); margin-top: 4px;
+}
+.planning-day-total {
+  margin-left: 10px; font-size: 13px; font-weight: 600;
+  color: var(--text-muted); text-transform: none;
+}
+
+/* ── Restos / bars à proximité ─────────── */
+.planning-venues { display: flex; flex-wrap: wrap; gap: 8px; }
+.planning-venue {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 8px 12px; border-radius: 12px; cursor: pointer;
+  border: 1.5px solid var(--border); background: #fff; font-family: inherit; text-align: left;
+  transition: all 0.15s;
+}
+.planning-venue strong { font-size: 13px; color: var(--text); }
+.planning-venue span   { font-size: 11px; color: var(--text-muted); }
+.planning-venue:hover,
+.planning-venue.active { border-color: var(--parme); background: var(--parme-light); }
+.planning-linked-place {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  background: var(--sable-lune); border-radius: 10px; padding: 8px 12px;
+  font-size: 13px; color: var(--text);
+}
+.planning-linked-place button {
+  margin-left: auto; border: none; background: none; cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 600; color: var(--parme);
+}

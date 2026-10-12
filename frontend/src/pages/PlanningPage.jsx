@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import api from '../api/axios';
@@ -25,6 +25,12 @@ const EMPTY_ACTIVITY = {
   title: '', description: '', category: '', price: '',
   hasSpecialPrice: false, specialPriceNote: '',
 };
+
+/** Tags pour lesquels on propose les établissements de la carte autour de la destination */
+const VENUE_TAGS = ['restaurant', 'bar'];
+
+/** Zone de recherche autour de la destination (~25 km), au format bbox de /api/places */
+const RADIUS_DEG = 0.25;
 
 const fmtEur  = (n) => `${(n ?? 0).toLocaleString('fr-FR')} €`;
 const catIcon = (v) => CATEGORIES.find(c => c.value === v)?.icon ?? '📍';
@@ -57,7 +63,7 @@ async function geocode(destination) {
 /* ════════════════════════════════════════
    MODAL — ajout / modification d'activité
    ════════════════════════════════════════ */
-function ActivityModal({ tripId, days, initial, onClose, onSaved }) {
+function ActivityModal({ tripId, days, initial, priceDefaults, getCoords, onClose, onSaved }) {
   const isEdit = !!initial.id;
   const [form, setForm] = useState({
     title:            initial.title            ?? EMPTY_ACTIVITY.title,
@@ -68,17 +74,57 @@ function ActivityModal({ tripId, days, initial, onClose, onSaved }) {
     specialPriceNote: initial.specialPriceNote ?? EMPTY_ACTIVITY.specialPriceNote,
     date:             initial.date,
     slot:             initial.slot,
+    place:            initial.place            ?? null,
   });
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState('');
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState('');
+  const [venues,      setVenues]      = useState({ category: null, places: [] });
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+
+  /* Changer de type pré-remplit le prix moyen du tag, sauf si l'utilisateur a saisi son propre prix */
+  const selectCategory = (value) => setForm(f => {
+    const category = f.category === value ? '' : value;
+    const priceIsDefault = f.price === '' || +f.price === priceDefaults[f.category];
+    return {
+      ...f,
+      category,
+      price: priceIsDefault && !f.place ? (priceDefaults[category] ?? '') : f.price,
+    };
+  });
+
+  /* Restos / bars : établissements de la carte autour de la destination */
+  const isVenue = VENUE_TAGS.includes(form.category);
+  const venuesLoading = isVenue && venues.category !== form.category;
+  useEffect(() => {
+    if (!VENUE_TAGS.includes(form.category)) return;
+    let cancelled = false;
+    const category = form.category;
+    getCoords()
+      .then(coords => {
+        if (!coords) return [];
+        const bbox = [coords.lat - RADIUS_DEG, coords.lng - RADIUS_DEG, coords.lat + RADIUS_DEG, coords.lng + RADIUS_DEG].join(',');
+        return api.get('/api/places', { params: { tags: category, bbox, recommended: true } }).then(res => res.data.places);
+      })
+      .catch(() => [])
+      .then(places => !cancelled && setVenues({ category, places }));
+    return () => { cancelled = true; };
+  }, [form.category, getCoords]);
+
+  const pickVenue = (p) => setForm(f => ({
+    ...f,
+    title: p.name,
+    description: f.description || p.description || '',
+    place: { id: p.id, name: p.name },
+    price: p.averagePrice ?? priceDefaults[f.category] ?? '',
+  }));
 
   const handleSave = async () => {
     if (!form.title.trim()) { setError('Donnez un titre à l\'activité.'); return; }
     setSaving(true); setError('');
     try {
-      const payload = { ...form, price: form.price !== '' ? +form.price : null };
+      const { place, ...rest } = form;
+      const payload = { ...rest, placeId: place?.id ?? null, price: form.price !== '' ? +form.price : null };
       const res = isEdit
         ? await api.patch(`/api/trips/${tripId}/activities/${initial.id}`, payload)
         : await api.post(`/api/trips/${tripId}/activities`, payload);
@@ -130,16 +176,54 @@ function ActivityModal({ tripId, days, initial, onClose, onSaved }) {
             {CATEGORIES.map(c => (
               <button key={c.value} type="button"
                 className={`transport-pill${form.category === c.value ? ' active' : ''}`}
-                onClick={() => setForm(f => ({ ...f, category: f.category === c.value ? '' : c.value }))}>
+                onClick={() => selectCategory(c.value)}>
                 {c.icon} {c.label}
               </button>
             ))}
           </div>
         </div>
 
+        {isVenue && (
+          <div className="trip-field">
+            <label className="trip-label">
+              {form.category === 'bar' ? 'Bars' : 'Restaurants'} à proximité <span>(lieux de la carte)</span>
+            </label>
+            {venuesLoading ? (
+              <span className="planning-hint" style={{ textAlign: 'left' }}>Recherche...</span>
+            ) : venues.places.length === 0 ? (
+              <span className="planning-hint" style={{ textAlign: 'left' }}>
+                Aucun lieu de ce type sur la carte autour de la destination — saisissez-le librement.
+              </span>
+            ) : (
+              <div className="planning-venues">
+                {venues.places.slice(0, 8).map(p => (
+                  <button key={p.id} type="button"
+                    className={`planning-venue${form.place?.id === p.id ? ' active' : ''}`}
+                    onClick={() => pickVenue(p)}>
+                    <strong>{p.name}</strong>
+                    <span>{p.averagePrice != null ? `~${fmtEur(p.averagePrice)}` : 'prix moyen'} · ❤️ {p.likesCount}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {form.place && (
+          <div className="planning-linked-place">
+            📍 Lieu de la carte : <strong>{form.place.name}</strong>
+            <button type="button" onClick={() => setForm(f => ({ ...f, place: null }))}>Détacher</button>
+          </div>
+        )}
+
         <div className="trip-field">
-          <label className="trip-label">Prix <span>(€, optionnel)</span></label>
+          <label className="trip-label">Prix par personne <span>(€, optionnel)</span></label>
           <input className="trip-input" type="number" min="0" placeholder="25" value={form.price} onChange={set('price')} />
+          {priceDefaults[form.category] != null && (
+            <span className="planning-hint" style={{ textAlign: 'left' }}>
+              Prix moyen {CATEGORIES.find(c => c.value === form.category)?.label.toLowerCase()} : {fmtEur(priceDefaults[form.category])} / pers. — modifiable
+            </span>
+          )}
         </div>
 
         <div className="trip-field">
@@ -189,6 +273,7 @@ export default function PlanningPage() {
   const [selectedDay,    setSelectedDay]    = useState(null);
   const [modalInitial,   setModalInitial]   = useState(null);
   const [deleteActivity, setDeleteActivity] = useState(null);
+  const [priceDefaults,  setPriceDefaults]  = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -196,12 +281,14 @@ export default function PlanningPage() {
       api.get(`/api/trips/${id}`),
       api.get(`/api/trips/${id}/activities`),
       api.get(`/api/trips/${id}/accommodations`),
+      api.get('/api/price-defaults'),
     ])
-      .then(([t, a, acc]) => {
+      .then(([t, a, acc, defaults]) => {
         if (cancelled) return;
         setTrip(t.data);
         setActivities(a.data);
         setAccommodations(acc.data);
+        setPriceDefaults(defaults.data);
       })
       .catch(err => !cancelled && setLoadError(err.response?.data?.message || 'Impossible de charger le planning.'))
       .finally(() => !cancelled && setLoading(false));
@@ -217,15 +304,31 @@ export default function PlanningPage() {
     return m;
   }, [activities]);
 
-  /* Budget : transport + logements + activités, comparé au budget prévu (peut devenir négatif) */
+  /*
+   * Budget. Les prix d'activités sont par personne ; logements et transport sont des totaux.
+   * Budget du groupe = activités × voyageurs + logements + transport, comparé au budget prévu
+   * (peut devenir négatif). Budget individuel = part de chacun.
+   */
   const costs = useMemo(() => {
-    const act   = activities.reduce((sum, a) => sum + (a.price ?? 0), 0);
-    const accom = accommodations.reduce((sum, a) => sum + (a.price ?? 0), 0);
-    const trans = trip?.computedTotalCost ?? 0;
-    return { act, accom, trans, total: act + accom + trans };
+    const travelers = Math.max(1, trip?.travelers ?? 1);
+    const isFood = (a) => VENUE_TAGS.includes(a.category);
+    const food   = activities.filter(isFood).reduce((sum, a) => sum + (a.price ?? 0), 0);
+    const other  = activities.filter(a => !isFood(a)).reduce((sum, a) => sum + (a.price ?? 0), 0);
+    const accom  = accommodations.reduce((sum, a) => sum + (a.price ?? 0), 0);
+    const trans  = trip?.computedTotalCost ?? 0;
+    const group  = (food + other) * travelers + accom + trans;
+    return { travelers, food, other, accom, trans, group, perPerson: Math.round(group / travelers) };
   }, [activities, accommodations, trip]);
 
-  const remaining = trip?.budget != null ? trip.budget - costs.total : null;
+  const remaining = trip?.budget != null ? trip.budget - costs.group : null;
+
+  /* Coordonnées de la destination, géocodées une seule fois par page */
+  const coordsRef = useRef(null);
+  const destination = trip?.destination;
+  const getCoords = useCallback(() => {
+    if (!coordsRef.current) coordsRef.current = geocode(destination);
+    return coordsRef.current;
+  }, [destination]);
 
   const runGenerate = async (replaceAuto) => {
     setAskGenerate(false);
@@ -233,7 +336,7 @@ export default function PlanningPage() {
     setGenerateMsg('');
     try {
       // Coordonnées de la destination pour proposer des lieux de la carte à proximité
-      const coords = await geocode(trip.destination);
+      const coords = await getCoords();
       const { data } = await api.post(`/api/trips/${id}/activities/generate`, { ...coords, replaceAuto });
       setActivities(data.activities);
       setGenerateMsg(data.created === 0
@@ -313,14 +416,28 @@ export default function PlanningPage() {
           {/* ── Colonne latérale : budget + auto-remplissage ── */}
           <aside className="planning-side">
             <div className="trip-card-costs planning-budget">
-              <div className="trip-cost-row"><span className="trip-cost-label">🎯 Activités</span><span className="trip-cost-value">{fmtEur(costs.act)}</span></div>
+              <div className="planning-budget-caption">Par personne</div>
+              <div className="trip-cost-row"><span className="trip-cost-label">🎯 Activités</span><span className="trip-cost-value">{fmtEur(costs.other)}</span></div>
+              <div className="trip-cost-row"><span className="trip-cost-label">🍽 Restos &amp; bars</span><span className="trip-cost-value">{fmtEur(costs.food)}</span></div>
+
+              <div className="planning-budget-caption">Groupe · {costs.travelers} voyageur{costs.travelers > 1 ? 's' : ''}</div>
+              <div className="trip-cost-row">
+                <span className="trip-cost-label">Activités, restos &amp; bars (× {costs.travelers})</span>
+                <span className="trip-cost-value">{fmtEur((costs.other + costs.food) * costs.travelers)}</span>
+              </div>
               <div className="trip-cost-row"><span className="trip-cost-label">🏨 Logements</span><span className="trip-cost-value">{fmtEur(costs.accom)}</span></div>
               <div className="trip-cost-row"><span className="trip-cost-label">🚗 Transport</span><span className="trip-cost-value">{fmtEur(costs.trans)}</span></div>
               <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '2px 0' }} />
               <div className="trip-cost-row trip-cost-total">
-                <span className="trip-cost-label">Total estimé</span>
-                <span className="trip-cost-value">{fmtEur(costs.total)}</span>
+                <span className="trip-cost-label">Total du groupe</span>
+                <span className="trip-cost-value">{fmtEur(costs.group)}</span>
               </div>
+              {costs.travelers > 1 && (
+                <div className="trip-cost-row">
+                  <span className="trip-cost-label">Soit par personne</span>
+                  <span className="trip-cost-value">{fmtEur(costs.perPerson)}</span>
+                </div>
+              )}
               {remaining != null && (
                 <div className="trip-cost-row">
                   <span className="trip-cost-label">Budget restant (sur {fmtEur(trip.budget)})</span>
@@ -353,6 +470,9 @@ export default function PlanningPage() {
 
             <h2 className="planning-day-title">
               Jour {dayIndex + 1} — {fmtDay(currentDay, { weekday: 'long', day: 'numeric', month: 'long' })}
+              <span className="planning-day-total">
+                {fmtEur(dayActivities.reduce((sum, a) => sum + (a.price ?? 0), 0))} / pers.
+              </span>
             </h2>
 
             {SLOTS.map(sl => {
@@ -372,7 +492,8 @@ export default function PlanningPage() {
                         <strong>{a.title}</strong>
                         {a.description && <p>{a.description}</p>}
                         <div className="planning-activity-meta">
-                          {a.price != null && <span>💰 {fmtEur(a.price)}</span>}
+                          {a.price != null && <span>💰 {fmtEur(a.price)} / pers.</span>}
+                          {a.place && <span>📍 Lieu de la carte</span>}
                           {a.hasSpecialPrice && <span className="accom-badge">🏷 {a.specialPriceNote || 'Prix spécial'}</span>}
                           {a.isAuto && <span className="accom-badge planning-badge-auto">✨ Suggestion</span>}
                         </div>
@@ -393,6 +514,8 @@ export default function PlanningPage() {
           tripId={id}
           days={days}
           initial={modalInitial}
+          priceDefaults={priceDefaults}
+          getCoords={getCoords}
           onClose={() => setModalInitial(null)}
           onSaved={handleSaved}
         />
