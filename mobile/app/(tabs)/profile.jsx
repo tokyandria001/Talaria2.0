@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, Alert, ActivityIndicator, Switch,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -24,6 +24,14 @@ export default function ProfileScreen() {
   const [deleteModal, setDeleteModal] = useState(false);
   const [deletePwd,   setDeletePwd]   = useState('');
   const [deleting,    setDeleting]    = useState(false);
+  const [pendingFriends, setPendingFriends] = useState(0);
+
+  // Nombre de demandes d'ami reçues, rafraîchi à chaque retour sur l'écran
+  useFocusEffect(useCallback(() => {
+    client.get('/api/friends/requests')
+      .then(({ data }) => setPendingFriends(data.received.length))
+      .catch(() => {});
+  }, []));
 
   const initials = user
     ? (((user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')) || (user.email?.[0] ?? '?')).toUpperCase()
@@ -92,6 +100,30 @@ export default function ProfileScreen() {
             {user?.username && <Text style={[s.userPseudo, { color: t.parme }]}>@{user.username}</Text>}
           </View>
         </View>
+
+        {/* Amis (phase 7) */}
+        <TouchableOpacity
+          style={[s.card, { backgroundColor: t.white, borderColor: t.border }]}
+          onPress={() => router.push('/friends')}
+          activeOpacity={0.85}
+        >
+          <View style={s.settingRow}>
+            <View style={s.settingLeft}>
+              <View style={[s.settingIcon, { backgroundColor: isDark ? '#2e1a40' : '#f0e8f5' }]}>
+                <Ionicons name="people" size={18} color={t.parme} />
+              </View>
+              <View>
+                <Text style={[s.settingLabel, { color: t.text }]}>Mes amis</Text>
+                <Text style={[s.settingDesc, { color: t.textMuted }]}>
+                  {pendingFriends > 0
+                    ? `${pendingFriends} demande${pendingFriends > 1 ? 's' : ''} en attente`
+                    : 'Retrouvez vos compagnons de voyage'}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={t.parme} />
+          </View>
+        </TouchableOpacity>
 
         {/* Apparence */}
         <View style={[s.card, { backgroundColor: t.white, borderColor: t.border }]}>

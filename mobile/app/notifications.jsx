@@ -19,8 +19,8 @@ function timeAgo(iso) {
   return `il y a ${Math.floor(h / 24)}j`;
 }
 
-const TYPE_ICON = { like: 'heart', comment: 'chatbubble' };
-const TYPE_COLOR = { like: '#ef4444', comment: Colors.parme };
+const TYPE_ICON = { like: 'heart', comment: 'chatbubble', friend_request: 'person-add', friend_accept: 'people' };
+const TYPE_COLOR = { like: '#ef4444', comment: Colors.parme, friend_request: Colors.parme, friend_accept: '#16a34a' };
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -83,7 +83,10 @@ export default function NotificationsScreen() {
             <TouchableOpacity
               style={[s.item, !item.isRead && s.itemUnread]}
               activeOpacity={0.8}
-              onPress={() => markRead(item.id)}
+              onPress={() => {
+                markRead(item.id);
+                if (item.type?.startsWith('friend_')) router.push('/friends');
+              }}
             >
               <View style={[s.iconWrap, { backgroundColor: (TYPE_COLOR[item.type] ?? Colors.parme) + '20' }]}>
                 <Ionicons
