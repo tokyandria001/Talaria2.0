@@ -4,25 +4,33 @@
     "slug": "talaria",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/DA_3.svg",
+    "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "talaria",
     "splash": {
-      "image": "./assets/DA_3.svg",
+      "image": "./assets/splash-logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#4f203f"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.talaria.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.talaria.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/DA_3.svg",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#fcf9f1"
       },
-      "edgeToEdgeEnabled": false
+      "edgeToEdgeEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/DA_3.svg"
@@ -30,7 +38,20 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Talaria utilise votre position pour centrer la carte et afficher les lieux proches."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Talaria accède à vos photos pour votre photo de profil et les photos des lieux.",
+          "cameraPermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false
@@ -38,7 +59,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "f2c40899-dba8-409c-9d9e-573d0eca85ae"
+        "projectId": "6cc7778e-0f6e-4a83-8c51-6d63e551cfc5"
       }
     },
     "owner": "toto2k01"
