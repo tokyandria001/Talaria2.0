@@ -11,5 +11,8 @@ framework:
 when@test:
     framework:
         test: true
+        # Aucun appel réseau pendant les tests : réponses de Photon simulées
+        http_client:
+            mock_response_factory: App\Tests\Mock\PhotonMockResponseFactory
         session:
             storage_factory_id: session.storage.factory.mock_file

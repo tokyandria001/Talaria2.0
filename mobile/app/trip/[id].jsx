@@ -212,9 +212,13 @@ export default function TripScreen() {
                 {dayActivities.map(a => <TimelineItem key={a.id} activity={a} onPress={() => setSheet(a)} />)}
               </View>
             )}
-            <TouchableOpacity style={s.addActivity} onPress={() => setSheet({ date: currentDay })}>
-              <Ionicons name="add" size={18} color={Colors.parme} />
+            {/* Ajout depuis la carte de la destination ; ou une activité sans lieu (réunion, temps libre...) */}
+            <TouchableOpacity style={s.addActivity} onPress={() => router.push({ pathname: '/trip-map/[id]', params: { id: String(trip.id), day: currentDay } })}>
+              <Ionicons name="map-outline" size={18} color={Colors.parme} />
               <Text style={s.addActivityText}>Ajouter une activité</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.addManual} onPress={() => setSheet({ date: currentDay })} hitSlop={8}>
+              <Text style={s.addManualText}>ou saisir une activité sans lieu</Text>
             </TouchableOpacity>
           </>
         )}
@@ -335,6 +339,8 @@ const s = StyleSheet.create({
   empty:     { alignItems: 'center', backgroundColor: Colors.white, borderRadius: 16, padding: 18 },
   emptyText: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted, textAlign: 'center', lineHeight: 19 },
   addActivity:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderStyle: 'dashed', borderColor: Colors.parme, borderRadius: 100, paddingVertical: 12, marginTop: 6 },
+  addManual:     { alignSelf: 'center', marginTop: 10 },
+  addManualText: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.parme, textDecorationLine: 'underline' },
   addActivityText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.parme },
 
   stats:     { flexDirection: 'row', backgroundColor: Colors.parme, borderRadius: 18, paddingVertical: 16, paddingHorizontal: 8 },

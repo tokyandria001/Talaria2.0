@@ -25,6 +25,23 @@ class Trip
     #[Assert\Length(max: 255)]
     private string $destination;
 
+    /** Destination choisie dans les suggestions : position (carte, planning automatique) et pays (drapeau) */
+    #[ORM\Column(nullable: true)]
+    #[Assert\Range(min: -90, max: 90)]
+    private ?float $destinationLatitude = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Assert\Range(min: -180, max: 180)]
+    private ?float $destinationLongitude = null;
+
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $destinationCountry = null;
+
+    /** Code pays ISO à 2 lettres (FR, MX...) */
+    #[ORM\Column(length: 2, nullable: true)]
+    #[Assert\Regex(pattern: '/^[A-Z]{2}$/', message: 'Code pays invalide.')]
+    private ?string $destinationCountryCode = null;
+
     #[ORM\Column(length: 255)]
     #[Assert\NotBlank(message: 'La ville de départ est requise.')]
     #[Assert\Length(max: 255)]
@@ -134,6 +151,18 @@ class Trip
 
     public function getDestination(): string { return $this->destination; }
     public function setDestination(string $v): static { $this->destination = $v; return $this; }
+
+    public function getDestinationLatitude(): ?float { return $this->destinationLatitude; }
+    public function setDestinationLatitude(?float $v): static { $this->destinationLatitude = $v; return $this; }
+
+    public function getDestinationLongitude(): ?float { return $this->destinationLongitude; }
+    public function setDestinationLongitude(?float $v): static { $this->destinationLongitude = $v; return $this; }
+
+    public function getDestinationCountry(): ?string { return $this->destinationCountry; }
+    public function setDestinationCountry(?string $v): static { $this->destinationCountry = $v; return $this; }
+
+    public function getDestinationCountryCode(): ?string { return $this->destinationCountryCode; }
+    public function setDestinationCountryCode(?string $v): static { $this->destinationCountryCode = $v; return $this; }
 
     public function getDepartureCity(): string { return $this->departureCity; }
     public function setDepartureCity(string $v): static { $this->departureCity = $v; return $this; }

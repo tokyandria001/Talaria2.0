@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { Map as MapLibreMap, Camera, GeoJSONSource, Layer, Images, UserLocation } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import MapFiltersSheet, { DEFAULT_FILTERS, applyFilters } from './MapFiltersShee
 import PlaceDetailSheet from './PlaceDetailSheet';
 import AddPlaceSheet from './AddPlaceSheet';
 import { CLUSTER_IMAGES, PIN_IMAGES, PIN_ACTIVE_IMAGES } from '../../constants/MarkerImages';
+import { MAP_STYLE, MAP_ATTRIBUTION } from '../../constants/mapStyle';
 
 /* Raccourcis du design : Logements et Activités filtrent la carte ; Vols et Destinations arrivent plus tard */
 const SHORTCUTS = [
@@ -24,9 +25,8 @@ const SHORTCUTS = [
 const LODGING_TAGS = ['hotel', 'auberge', 'camping'];
 const ACTIVITY_TAGS = PLACE_CATEGORIES.flatMap(c => c.tags).filter(t => !LODGING_TAGS.includes(t));
 
-/** Zone visible de la carte → bbox « lat1,lng1,lat2,lng2 » de l'API */
-const toBbox = (r) => [r.latitude - r.latitudeDelta / 2, r.longitude - r.longitudeDelta / 2, r.latitude + r.latitudeDelta / 2, r.longitude + r.longitudeDelta / 2]
-  .map(v => v.toFixed(4)).join(',');
+/** Zone visible de la carte ([ouest, sud, est, nord]) → bbox « sud,ouest,nord,est » de l'API */
+const toBbox = ([west, south, east, north]) => [south, west, north, east].map(v => v.toFixed(4)).join(',');
 
 /** Libellé d'une bulle (une image par libellé, voir scripts/generate-markers.py) : 7, 40+, 300+, 5k+, 20k+ */
 const clusterLabel = (n) => {
@@ -37,15 +37,32 @@ const clusterLabel = (n) => {
   return n < 20000 ? '10k+' : n < 50000 ? '20k+' : '50k+';
 };
 
-const FRANCE = { latitude: 46.5, longitude: 2.5, latitudeDelta: 10, longitudeDelta: 10 };
+/** Vue de départ : la France entière (zone approximative tant que la carte n'a pas donné la sienne) */
+const FRANCE = { center: [2.5, 46.5], zoom: 4.6, bounds: [-5.5, 41.3, 10.5, 51.5] };
 
-export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialShortcut, onShortcutHandled, bottomOffset = 100 }) {
+/** Images des marqueurs (PNG générés par scripts/generate-markers.py), dessinées par la carte elle-même */
+const MARKER_IMAGES = {
+  ...Object.fromEntries(Object.entries(PIN_IMAGES).map(([cat, img]) => [`pin-${cat}`, img])),
+  ...Object.fromEntries(Object.entries(PIN_ACTIVE_IMAGES).map(([cat, img]) => [`pin-${cat}-active`, img])),
+  ...Object.fromEntries(Object.entries(CLUSTER_IMAGES).map(([label, img]) => [`cluster-${label}`, img])),
+};
+
+/**
+ * Carte des lieux. Depuis un voyage : `initialCamera` centre la carte sur la destination et
+ * `tripTarget` ({ trip, day }) fait ajouter les lieux directement à ce voyage (`onAddedToTrip` ensuite).
+ */
+export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialShortcut, onShortcutHandled, bottomOffset = 100, initialCamera, tripTarget, onAddedToTrip }) {
   const insets = useSafeAreaInsets();
-  const mapRef = useRef(null);
+  const cameraRef = useRef(null);
+  const markerPressedAt = useRef(0); // un appui sur un marqueur ne ferme pas l'aperçu
 
   const [places,     setPlaces]     = useState([]);
   const [clusters,   setClusters]   = useState([]); // bulles numérotées quand la zone contient trop de lieux
-  const [region,     setRegion]     = useState(FRANCE);
+  // Zone de départ : la destination du voyage (environ 30 km autour) ou la France
+  const [view,       setView]       = useState(() => (initialCamera ? {
+    center: initialCamera.center, zoom: initialCamera.zoom,
+    bounds: [initialCamera.center[0] - 0.2, initialCamera.center[1] - 0.15, initialCamera.center[0] + 0.2, initialCamera.center[1] + 0.15],
+  } : FRANCE));
   const [truncated,  setTruncated]  = useState(false);
   const [search,     setSearch]     = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -94,7 +111,7 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
     let cancelled = false;
     const id = setTimeout(() => {
       // Au-delà de 150 lieux dans la zone, le serveur renvoie des bulles regroupées
-      const params = { bbox: toBbox(region), clusters: 'true', limit: 150 };
+      const params = { bbox: toBbox(view.bounds), clusters: 'true', limit: 150 };
       if (search) params.search = search;
       if (serverTags.length) params.tags = serverTags.join(',');
       client.get('/api/places', { params })
@@ -102,7 +119,7 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
         .catch(() => {});
     }, 350);
     return () => { cancelled = true; clearTimeout(id); };
-  }, [search, region, serverTags, hasFilter]);
+  }, [search, view.bounds, serverTags, hasFilter]);
 
   // Raccourci choisi depuis l'accueil : la carte s'ouvre déjà filtrée
   useEffect(() => {
@@ -144,15 +161,13 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
 
   // Bulle touchée : zoom centré dessus, elle se divise en bulles plus petites ou en lieux
   const zoomInto = (c) => {
-    mapRef.current?.animateToRegion({
-      latitude: c.latitude, longitude: c.longitude,
-      latitudeDelta: region.latitudeDelta / 3, longitudeDelta: region.longitudeDelta / 3,
-    }, 500);
+    cameraRef.current?.easeTo({ center: [c.longitude, c.latitude], zoom: Math.min(view.zoom + 1.6, 18), duration: 500 });
   };
 
+  // Vue rapprochée inclinée : les bâtiments 3D apparaissent à partir du zoom 14
   const flyToUser = () => {
     if (!userLoc) { comingSoon('Le centrage sur votre position (activez la localisation)'); return; }
-    mapRef.current?.animateToRegion({ latitude: userLoc.latitude, longitude: userLoc.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 800);
+    cameraRef.current?.flyTo({ center: [userLoc.longitude, userLoc.latitude], zoom: 15, pitch: 45, duration: 1200 });
   };
 
   const onPlaceAdded = (place) => {
@@ -160,39 +175,85 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
     if (!place) return;
     setPlaces(prev => [place, ...prev]);
     setPreview(place);
-    mapRef.current?.animateToRegion({ latitude: place.latitude, longitude: place.longitude, latitudeDelta: 0.03, longitudeDelta: 0.03 }, 800);
+    cameraRef.current?.flyTo({ center: [place.longitude, place.latitude], zoom: 15.5, pitch: 45, duration: 1000 });
+  };
+
+  /** Lieux et bulles au format GeoJSON, chaque point avec le nom de son image */
+  const placesGeoJson = useMemo(() => ({
+    type: 'FeatureCollection',
+    features: visible.map(p => {
+      const cat = PIN_IMAGES[categoryOf(p).value] ? categoryOf(p).value : 'default';
+      const selected = preview?.id === p.id;
+      return {
+        type: 'Feature', id: p.id,
+        geometry: { type: 'Point', coordinates: [p.longitude, p.latitude] },
+        properties: { id: p.id, icon: selected ? `pin-${cat}-active` : `pin-${cat}`, sort: selected ? 1 : 0 },
+      };
+    }),
+  }), [visible, preview?.id]);
+
+  const clustersGeoJson = useMemo(() => ({
+    type: 'FeatureCollection',
+    features: clusters.map((c, i) => ({
+      type: 'Feature', id: i,
+      geometry: { type: 'Point', coordinates: [c.longitude, c.latitude] },
+      properties: { latitude: c.latitude, longitude: c.longitude, icon: `cluster-${clusterLabel(c.count)}`, count: c.count },
+    })),
+  }), [clusters]);
+
+  const onPlacePress = (e) => {
+    const id = e.nativeEvent.features?.[0]?.properties?.id;
+    const place = visible.find(p => p.id === id);
+    if (!place) return;
+    markerPressedAt.current = Date.now();
+    setPreview(place);
+  };
+
+  const onClusterPress = (e) => {
+    const props = e.nativeEvent.features?.[0]?.properties;
+    if (!props) return;
+    markerPressedAt.current = Date.now();
+    zoomInto(props);
   };
 
   return (
     <View style={s.root}>
-      <MapView
-        ref={mapRef}
+      {/* Carte MapLibre, même style que le site (tuiles OpenFreeMap, bâtiments 3D à partir du zoom 14) */}
+      <MapLibreMap
         style={StyleSheet.absoluteFill}
-        provider={PROVIDER_DEFAULT}
-        initialRegion={FRANCE}
-        onLongPress={(e) => setAddCoords(e.nativeEvent.coordinate)}
-        onRegionChangeComplete={setRegion}
-        onPress={() => setPreview(null)}
-        showsUserLocation
-        showsMyLocationButton={false}
+        mapStyle={MAP_STYLE}
+        attribution={false}
+        logo={false}
+        compass={false}
+        onRegionDidChange={(e) => {
+          const { bounds, zoom, center } = e.nativeEvent;
+          if (bounds) setView({ bounds, zoom, center });
+        }}
+        onPress={() => { if (Date.now() - markerPressedAt.current > 400) setPreview(null); }}
+        onLongPress={(e) => {
+          const [longitude, latitude] = e.nativeEvent.lngLat;
+          setAddCoords({ latitude, longitude });
+        }}
       >
-        {visible.map(p => {
-          const cat = categoryOf(p).value || 'default';
-          const images = preview?.id === p.id ? PIN_ACTIVE_IMAGES : PIN_IMAGES;
-          return (
-            <Marker key={p.id} coordinate={{ latitude: p.latitude, longitude: p.longitude }}
-              image={images[cat] ?? images.default} anchor={{ x: 0.5, y: 1 }}
-              onPress={(e) => { e.stopPropagation?.(); setPreview(p); }} />
-          );
-        })}
-        {clusters.map(c => {
-          return (
-            <Marker key={`c${c.latitude},${c.longitude}`} coordinate={{ latitude: c.latitude, longitude: c.longitude }}
-              image={CLUSTER_IMAGES[clusterLabel(c.count)]} anchor={{ x: 0.5, y: 0.5 }}
-              onPress={(e) => { e.stopPropagation?.(); zoomInto(c); }} />
-          );
-        })}
-      </MapView>
+        <Camera ref={cameraRef} initialViewState={initialCamera ?? { center: FRANCE.center, zoom: FRANCE.zoom }} />
+        <Images images={MARKER_IMAGES} />
+        {userLoc && <UserLocation />}
+
+        <GeoJSONSource id="clusters" data={clustersGeoJson} onPress={onClusterPress}>
+          <Layer id="clusters-icons" type="symbol" layout={{
+            'icon-image': ['get', 'icon'], 'icon-anchor': 'center',
+            'icon-allow-overlap': true, 'icon-ignore-placement': true,
+          }} />
+        </GeoJSONSource>
+
+        <GeoJSONSource id="places" data={placesGeoJson} onPress={onPlacePress}>
+          <Layer id="places-pins" type="symbol" layout={{
+            'icon-image': ['get', 'icon'], 'icon-anchor': 'bottom',
+            'icon-allow-overlap': true, 'icon-ignore-placement': true,
+            'symbol-sort-key': ['get', 'sort'],
+          }} />
+        </GeoJSONSource>
+      </MapLibreMap>
 
       {/* En-tête + raccourcis */}
       <View style={[s.top, { paddingTop: insets.top }]}>
@@ -234,8 +295,8 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
         </View>
       )}
 
-      {/* Mention obligatoire de la licence des données (ODbL) */}
-      <Text style={[s.attribution, { bottom: bottomOffset + 2 }]} pointerEvents="none">© les contributeurs OpenStreetMap</Text>
+      {/* Mentions obligatoires : fond de carte OpenFreeMap / OpenMapTiles, données OpenStreetMap (ODbL) */}
+      <Text style={[s.attribution, { bottom: bottomOffset + 2 }]} pointerEvents="none">{MAP_ATTRIBUTION}</Text>
 
       {/* Bouton position */}
       <TouchableOpacity style={[s.locate, { bottom: bottomOffset + 70 }]} onPress={flyToUser}>
@@ -257,14 +318,16 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
       <MapFiltersSheet
         visible={showFilters}
         filters={filters}
-        bbox={toBbox(region)}
+        bbox={toBbox(view.bounds)}
         search={search}
         tagsFor={tagsFor}
         userLoc={userLoc}
         onApply={(f) => { setFilters(f); setShowFilters(false); }}
         onClose={() => setShowFilters(false)}
       />
-      <PlaceDetailSheet place={detail} userLoc={userLoc} onClose={() => setDetail(null)} onToggleLike={toggleLike} />
+      <PlaceDetailSheet place={detail} userLoc={userLoc} onClose={() => setDetail(null)} onToggleLike={toggleLike}
+        presetTrip={tripTarget?.trip} presetDay={tripTarget?.day}
+        onAdded={() => { setDetail(null); setPreview(null); onAddedToTrip?.(); }} />
       <AddPlaceSheet visible={addCoords !== undefined} coords={addCoords} onClose={() => setAddCoords(undefined)} onSaved={onPlaceAdded} />
     </View>
   );

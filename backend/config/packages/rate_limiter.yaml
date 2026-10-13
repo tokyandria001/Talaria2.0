@@ -10,3 +10,8 @@ framework:
             policy: sliding_window
             limit: 30
             interval: '1 hour'
+        # Autocomplétion des villes (service gratuit Photon, à ménager) : 60 recherches par minute et par utilisateur
+        geo_search:
+            policy: sliding_window
+            limit: 60
+            interval: '1 minute'

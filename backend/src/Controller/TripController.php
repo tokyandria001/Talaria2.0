@@ -136,7 +136,18 @@ class TripController extends AbstractController
         $text = fn(string $k) => isset($data[$k]) && $data[$k] !== '' ? trim((string) $data[$k]) : null;
 
         if (array_key_exists('title', $data))             $trip->setTitle($text('title'));
-        if (array_key_exists('destination', $data))       $trip->setDestination((string) $text('destination'));
+        if (array_key_exists('destination', $data)) {
+            $previous = $this->hasDestination($trip) ? $trip->getDestination() : null;
+            $trip->setDestination((string) $text('destination'));
+            // Destination changée sans suggestion choisie : l'ancienne position ne vaut plus
+            if ($previous !== null && $previous !== $trip->getDestination() && !array_key_exists('destinationLatitude', $data)) {
+                $trip->setDestinationLatitude(null)->setDestinationLongitude(null)->setDestinationCountry(null)->setDestinationCountryCode(null);
+            }
+        }
+        if (array_key_exists('destinationLatitude', $data))    $trip->setDestinationLatitude($this->parseFloat($data['destinationLatitude'], 'latitude'));
+        if (array_key_exists('destinationLongitude', $data))   $trip->setDestinationLongitude($this->parseFloat($data['destinationLongitude'], 'longitude'));
+        if (array_key_exists('destinationCountry', $data))     $trip->setDestinationCountry($text('destinationCountry'));
+        if (array_key_exists('destinationCountryCode', $data)) $trip->setDestinationCountryCode($text('destinationCountryCode') ? strtoupper($text('destinationCountryCode')) : null);
         if (array_key_exists('departureCity', $data))     $trip->setDepartureCity((string) $text('departureCity'));
         if (array_key_exists('startDate', $data))         $trip->setStartDate($this->parseDate($data['startDate'], 'date de départ'));
         if (array_key_exists('endDate', $data))           $trip->setEndDate($this->parseDate($data['endDate'], 'date de retour'));
@@ -155,6 +166,12 @@ class TripController extends AbstractController
         if (array_key_exists('transportPricePerPerson', $data)) $trip->setTransportPricePerPerson($this->parseInt($data['transportPricePerPerson'], 'prix du billet'));
         if (array_key_exists('eachBooksOwnTransport', $data))   $trip->setEachBooksOwnTransport((bool) $data['eachBooksOwnTransport']);
         if (array_key_exists('splitCostsEqually', $data))       $trip->setSplitCostsEqually((bool) $data['splitCostsEqually']);
+    }
+
+    /** Destination déjà renseignée (voyage existant) */
+    private function hasDestination(Trip $trip): bool
+    {
+        return (new \ReflectionProperty(Trip::class, 'destination'))->isInitialized($trip);
     }
 
     /** Rattache le voyage à un groupe (groupId) ou le rend perso (groupId: null) */
@@ -209,6 +226,10 @@ class TripController extends AbstractController
             'id'               => $t->getId(),
             'title'            => $t->getTitle(),
             'destination'      => $t->getDestination(),
+            'destinationLatitude'    => $t->getDestinationLatitude(),
+            'destinationLongitude'   => $t->getDestinationLongitude(),
+            'destinationCountry'     => $t->getDestinationCountry(),
+            'destinationCountryCode' => $t->getDestinationCountryCode(),
             'departureCity'    => $t->getDepartureCity(),
             'startDate'        => $t->getStartDate()->format('Y-m-d'),
             'endDate'          => $t->getEndDate()->format('Y-m-d'),

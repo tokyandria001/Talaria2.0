@@ -24,7 +24,7 @@ function tripDays(start, end) {
   return days;
 }
 
-export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike }) {
+export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike, presetTrip, presetDay, onAdded }) {
   const [step,    setStep]    = useState('detail'); // detail | trip
   const [mode,    setMode]    = useState('add');    // add : planning · vote : proposition au groupe
   const [trips,   setTrips]   = useState(null);
@@ -58,6 +58,12 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
   const openTripPicker = async (nextMode = 'add') => {
     setMode(nextMode);
     setStep('trip');
+    // Ouvert depuis un voyage : pas de choix de voyage, le jour est déjà connu
+    if (presetTrip) {
+      setTrip(presetTrip);
+      setDay(presetDay && presetDay >= presetTrip.startDate && presetDay <= presetTrip.endDate ? presetDay : presetTrip.startDate);
+      return;
+    }
     if (trips) return;
     try {
       const { data } = await client.get('/api/trips');
@@ -82,7 +88,7 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
         await client.post(`/api/trips/${trip.id}/activities`, payload);
         Alert.alert('Ajouté au voyage', `${place.name} est dans le planning de ${trip.destination}.`);
       }
-      onClose();
+      onAdded ? onAdded() : onClose();
     } catch (err) {
       Alert.alert('Erreur', err.response?.data?.message || "Impossible d'ajouter le lieu au voyage.");
     } finally {
@@ -157,8 +163,8 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
             <Text style={s.backLinkText}>{place.name}</Text>
           </TouchableOpacity>
 
-          <SheetLabel style={{ marginTop: 4 }}>Voyage</SheetLabel>
-          {trips === null ? (
+          {presetTrip ? null : <SheetLabel style={{ marginTop: 4 }}>Voyage</SheetLabel>}
+          {presetTrip ? null : trips === null ? (
             <ActivityIndicator color={Colors.parme} style={{ alignSelf: 'flex-start' }} />
           ) : trips.length === 0 ? (
             <Text style={s.empty}>Aucun voyage à venir. Créez un voyage avec le bouton + pour y ajouter des lieux.</Text>

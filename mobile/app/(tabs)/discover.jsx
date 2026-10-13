@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapPanel from '../../components/discover/MapPanel';
+import { MapPanel } from '../../components/discover/mapSupport';
 import CommunityPanel from '../../components/discover/CommunityPanel';
 import DiscoverHeader from '../../components/discover/DiscoverHeader';
 import { TAB_BAR_HEIGHT } from '../../constants/Layout';

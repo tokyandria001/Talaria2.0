@@ -44,8 +44,8 @@ class ActivityController extends AbstractController
         if (!$trip) return $this->json(['message' => 'Voyage introuvable.'], 404);
 
         $data = json_decode($req->getContent(), true) ?? [];
-        $lat  = isset($data['lat']) && is_numeric($data['lat']) ? (float) $data['lat'] : null;
-        $lng  = isset($data['lng']) && is_numeric($data['lng']) ? (float) $data['lng'] : null;
+        $lat  = isset($data['lat']) && is_numeric($data['lat']) ? (float) $data['lat'] : $trip->getDestinationLatitude();
+        $lng  = isset($data['lng']) && is_numeric($data['lng']) ? (float) $data['lng'] : $trip->getDestinationLongitude();
 
         /** @var User $me */
         $me      = $this->getUser();

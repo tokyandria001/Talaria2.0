@@ -52,6 +52,16 @@ trait ApiInputTrait
         return (int) round((float) $value);
     }
 
+    /** Nombre à virgule optionnel (coordonnées) : null ou '' → null ; texte non numérique → 400 */
+    private function parseFloat(mixed $value, string $label): ?float
+    {
+        if ($value === null || $value === '') return null;
+        if (!is_numeric($value)) {
+            throw new InvalidInputException(sprintf('%s doit être un nombre.', ucfirst($label)));
+        }
+        return (float) $value;
+    }
+
     /** Décimal optionnel stocké en texte (colonnes DECIMAL) */
     private function parseDecimal(mixed $value, string $label): ?string
     {

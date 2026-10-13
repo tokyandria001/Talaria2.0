@@ -12,6 +12,7 @@ import GroupHero from '../components/groups/GroupHero';
 import FriendPickerSheet from '../components/groups/FriendPickerSheet';
 import GroupPickerSheet from '../components/groups/GroupPickerSheet';
 import UserAvatar from '../components/UserAvatar';
+import PlaceAutocomplete from '../components/PlaceAutocomplete';
 import { Colors } from '../constants/Colors';
 
 const STEPS = ['Général', 'Transport', 'Logement', 'Inviter'];
@@ -71,12 +72,20 @@ export default function NewTripScreen() {
 
   const [f, setF] = useState({
     destination: typeof params.destination === 'string' ? params.destination : '', start: null, end: null, budgetPerPerson: '', wishes: [],
+    destinationPlace: null, departurePlace: null,   // suggestions choisies (ville exacte, pays, position)
     transportMode: 'avion', departureCity: '', ticketPrice: '', eachBooksOwnTransport: false,
     distanceKm: '', fuelPrice: '', fuelConsumption: '', tollCost: '',
     accomType: 'airbnb', accomName: '', accomPrice: '', accomAddress: '', accomLink: '',
     needsRental: false, rentalCost: '', splitCostsEqually: true,
   });
   const set = (k) => (v) => setF(p => ({ ...p, [k]: v }));
+  // Recherche de villes indisponible : la destination tapée librement est acceptée
+  const [geoDown, setGeoDown] = useState(false);
+  // Texte modifié = choix annulé ; suggestion choisie = son nom dans le champ
+  const typeDestination = (v) => setF(p => ({ ...p, destination: v, destinationPlace: null }));
+  const pickDestination = (place) => setF(p => ({ ...p, destination: place.name, destinationPlace: place }));
+  const typeDeparture = (v) => setF(p => ({ ...p, departureCity: v, departurePlace: null }));
+  const pickDeparture = (place) => setF(p => ({ ...p, departureCity: place.name, departurePlace: place }));
 
   useEffect(() => {
     client.get('/api/friends').then(({ data }) => setFriends(data.map(x => x.user))).catch(() => {});
@@ -101,7 +110,7 @@ export default function NewTripScreen() {
   const accomPerPerson = int(f.accomPrice) ? Math.round(int(f.accomPrice) / travelers) : null;
 
   const canNext = [
-    f.destination.trim() && f.start && f.end && f.end >= f.start,
+    f.destination.trim() && (f.destinationPlace || geoDown) && f.start && f.end && f.end >= f.start,
     f.departureCity.trim().length > 0,
     true,
     true,
@@ -130,6 +139,12 @@ export default function NewTripScreen() {
       const car = f.transportMode === 'voiture';
       const { data: trip } = await client.post('/api/trips', {
         destination: f.destination.trim(),
+        ...(f.destinationPlace ? {
+          destinationLatitude: f.destinationPlace.latitude,
+          destinationLongitude: f.destinationPlace.longitude,
+          destinationCountry: f.destinationPlace.country,
+          destinationCountryCode: f.destinationPlace.countryCode,
+        } : {}),
         departureCity: f.departureCity.trim(),
         startDate: iso(f.start), endDate: iso(f.end),
         travelers,
@@ -216,7 +231,8 @@ export default function NewTripScreen() {
             <>
               {group && <Text style={s.groupNote}>👥 Voyage du groupe « {group.name} »</Text>}
               <Label>Rechercher une destination</Label>
-              <Input placeholder="Entrez un pays, une ville..." value={f.destination} onChangeText={set('destination')} />
+              <PlaceAutocomplete required placeholder="Entrez une ville, un pays..." icon="search"
+                value={f.destination} place={f.destinationPlace} onChangeText={typeDestination} onSelect={pickDestination} onUnavailable={setGeoDown} />
 
               <Label>Les dates du voyage</Label>
               <DateButton placeholder="Date de l'aller" value={fmt(f.start)} onPress={() => setDateField('start')} />
@@ -303,9 +319,11 @@ export default function NewTripScreen() {
 
               <Label>Trajet</Label>
               <SubLabel>Départ</SubLabel>
-              <Input icon="location-outline" placeholder="Paris (CDG)" value={f.departureCity} onChangeText={set('departureCity')} />
+              <PlaceAutocomplete placeholder="Paris" value={f.departureCity} place={f.departurePlace}
+                onChangeText={typeDeparture} onSelect={pickDeparture} />
               <SubLabel>Arrivée</SubLabel>
-              <Input icon="location-outline" value={f.destination} onChangeText={set('destination')} />
+              <PlaceAutocomplete required value={f.destination} place={f.destinationPlace}
+                onChangeText={typeDestination} onSelect={pickDestination} onUnavailable={setGeoDown} />
 
               {f.transportMode === 'voiture' ? (
                 <>

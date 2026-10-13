@@ -96,8 +96,9 @@ const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: Colors.parmeDark },
   bg:      { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(30,8,22,0.25)' },
+  // Voile sur toute la hauteur (le texte et les boutons restent lisibles sur toutes les photos)
   overlayBottom: {
-    position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%',
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(30,8,22,0.30)',
   },
 

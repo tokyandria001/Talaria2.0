@@ -48,6 +48,7 @@ export default function RootLayout() {
             <Stack.Screen name="complete-profile" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="new-trip"      options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="trip/[id]"     options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="trip-map/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="planning/[id]" options={{ animation: 'slide_from_right' }} />
           </Stack>
           </ThemeProvider>
