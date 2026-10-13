@@ -30,6 +30,9 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -49,7 +52,8 @@
         "expo-image-picker",
         {
           "photosPermission": "Talaria accède à vos photos pour votre photo de profil et les photos des lieux.",
-          "cameraPermission": false
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ]
     ],
@@ -62,6 +66,12 @@
         "projectId": "6cc7778e-0f6e-4a83-8c51-6d63e551cfc5"
       }
     },
-    "owner": "toto2k01"
+    "owner": "toto2k01",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/6cc7778e-0f6e-4a83-8c51-6d63e551cfc5"
+    }
   }
 }

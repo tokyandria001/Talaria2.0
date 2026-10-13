@@ -1,0 +1,17 @@
+# Jetons de renouvellement : le jeton d'accès (JWT) dure 1 heure, le jeton de renouvellement 30 jours.
+# L'app échange le second contre un nouveau couple via POST /api/token/refresh, sans redemander le mot de passe.
+gesdinet_jwt_refresh_token:
+    refresh_token_class: App\Entity\RefreshToken
+    # 30 jours, repartis de zéro à chaque renouvellement : on reste connecté tant qu'on ouvre l'app au moins une fois par mois
+    ttl: 2592000
+    ttl_update: true
+    # Chaque jeton de renouvellement ne sert qu'une fois (un nouveau est rendu à chaque renouvellement)
+    single_use: true
+    # Appareils connectés en même temps au maximum (le plus ancien est déconnecté au-delà)
+    max_tokens_per_user: 10
+    # En base : l'empreinte du jeton, pas le jeton (une copie de la base ne permet pas de se connecter)
+    hash_tokens:
+        enabled: true
+    token_parameter_name: refresh_token
+    return_expiration: true
+    return_expiration_parameter_name: refresh_token_expiration

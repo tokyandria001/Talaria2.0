@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import client from '../../api/client';
+import client, { saveTokens } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { SettingsPage, Label, settingsStyles as ss } from '../../components/settings/SettingsUI';
 import { Colors } from '../../constants/Colors';
@@ -27,9 +27,11 @@ export default function PasswordScreen() {
     setError('');
     setSaving(true);
     try {
-      await client.put('/api/profile/password', { currentPassword: form.currentPassword, newPassword: form.newPassword });
+      const { data } = await client.put('/api/profile/password', { currentPassword: form.currentPassword, newPassword: form.newPassword });
+      // Les autres appareils sont déconnectés ; celui-ci garde sa session avec le nouveau jeton
+      await saveTokens(data);
       await refreshUser();
-      Alert.alert('Mot de passe modifié', 'Ton nouveau mot de passe est enregistré.');
+      Alert.alert('Mot de passe modifié', 'Ton nouveau mot de passe est enregistré. Tes autres appareils ont été déconnectés.');
       router.back();
     } catch (err) {
       setError(err.response?.data?.message ?? 'Impossible de modifier le mot de passe.');

@@ -29,12 +29,17 @@ security:
         api:
             pattern: ^/api
             stateless: true
+            entry_point: jwt
             jwt: ~
+            # POST /api/token/refresh { refresh_token } → nouveau jeton d'accès + nouveau jeton de renouvellement
+            refresh_jwt:
+                check_path: /api/token/refresh
             provider: app_user_provider
 
     access_control:
         - { path: ^/api/auth/login, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/token/(refresh|revoke), roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
 
 when@test:

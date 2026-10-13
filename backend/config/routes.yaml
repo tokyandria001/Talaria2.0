@@ -7,3 +7,8 @@ controllers:
 api_auth_login:
     path: /api/auth/login
     methods: [POST]
+
+# Renouvellement du jeton d'accès (gesdinet/jwt-refresh-token-bundle, pare-feu « api »)
+api_token_refresh:
+    path: /api/token/refresh
+    methods: [POST]

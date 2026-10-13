@@ -20,6 +20,7 @@ final class AccountDeleter
 {
     public function __construct(
         private EntityManagerInterface $em,
+        private SessionTokens $sessions,
         #[Autowire('%kernel.project_dir%')] private string $projectDir,
     ) {}
 
@@ -39,6 +40,7 @@ final class AccountDeleter
         }
         $em->flush();
 
+        $this->sessions->revokeAll($user);
         $this->removeFile($user->getProfilePicture());
         $this->removeFile($user->getCoverPhoto());
         $em->remove($user);

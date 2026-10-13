@@ -13,6 +13,7 @@ use App\Entity\TripMessage;
 use App\Entity\User;
 use App\Service\Blocking;
 use App\Service\ImageUploader;
+use App\Service\SessionTokens;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -159,7 +160,7 @@ class ProfileController extends AbstractController
      * par la commande app:purge-deleted-accounts. Annulable d'ici là avec POST /restore.
      */
     #[Route('', name: 'delete', methods: ['DELETE'])]
-    public function deleteAccount(Request $request, UserPasswordHasherInterface $hasher): JsonResponse
+    public function deleteAccount(Request $request, UserPasswordHasherInterface $hasher, SessionTokens $sessions): JsonResponse
     {
         /** @var User $me */
         $me   = $this->getUser();
@@ -176,6 +177,7 @@ class ProfileController extends AbstractController
             $me->setDeletionRequestedAt(new \DateTimeImmutable());
             $this->em->flush();
         }
+        $sessions->revokeAll($me);
 
         return $this->json([
             'message' => sprintf('Votre compte sera supprimé le %s. Reconnectez-vous d\'ici là pour annuler.', $me->getDeletionScheduledFor()->format('d/m/Y')),
@@ -266,6 +268,7 @@ class ProfileController extends AbstractController
         Request $request,
         UserPasswordHasherInterface $hasher,
         EntityManagerInterface $em,
+        SessionTokens $sessions,
     ): JsonResponse {
         /** @var User $user */
         $user = $this->getUser();
@@ -287,7 +290,10 @@ class ProfileController extends AbstractController
         $user->setPasswordChangedAt(new \DateTimeImmutable());
         $em->flush();
 
-        return $this->json(['message' => 'Mot de passe modifié avec succès.']);
+        // Tous les appareils sont déconnectés ; celui qui vient de changer le mot de passe reste connecté
+        $sessions->revokeAll($user);
+
+        return $this->json(['message' => 'Mot de passe modifié avec succès.'] + $sessions->issue($user));
     }
 
     private function serializeUser(User $user): array
