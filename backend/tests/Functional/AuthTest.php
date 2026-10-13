@@ -16,6 +16,34 @@ final class AuthTest extends ApiTestCase
         self::assertSame('alice@talaria.test', $data['user']['email']);
     }
 
+    /** Appels du site web app.talaria.world : { username, email, password } puis login avec "email" */
+    public function testWebsiteRegisterAndLoginWithEmailField(): void
+    {
+        [$code] = $this->json('POST', '/api/auth/register', ['username' => 'malol', 'email' => 'malol@talaria.test', 'password' => 'secret']);
+        self::assertSame(201, $code);
+
+        [$code, $data] = $this->json('POST', '/api/auth/login', ['email' => 'malol@talaria.test', 'password' => 'secret']);
+        self::assertSame(200, $code);
+        self::assertNotEmpty($data['token']);
+        self::assertSame('malol', $data['username'], 'Pseudo enregistré à l\'inscription');
+        self::assertSame('malol@talaria.test', $data['email']);
+        self::assertIsInt($data['id']);
+
+        // Sans pseudo : début de l'email, jamais vide (affiché par le site)
+        $this->json('POST', '/api/auth/register', ['email' => 'sans.pseudo@talaria.test', 'password' => 'secret'], null, '10.9.9.9');
+        [, $data] = $this->json('POST', '/api/auth/login', ['email' => 'sans.pseudo@talaria.test', 'password' => 'secret']);
+        self::assertSame('sans.pseudo', $data['username']);
+
+        // Erreurs aussi dans "detail", le champ lu par le site
+        [$code, $data] = $this->json('POST', '/api/auth/login', ['email' => 'malol@talaria.test', 'password' => 'faux']);
+        self::assertSame(401, $code);
+        self::assertSame('Email ou mot de passe incorrect.', $data['detail']);
+
+        [$code, $data] = $this->json('POST', '/api/auth/register', ['username' => 'malol', 'email' => 'autre@talaria.test', 'password' => 'secret'], null, '10.9.9.9');
+        self::assertSame(422, $code);
+        self::assertSame('Ce pseudo est déjà pris.', $data['detail']);
+    }
+
     public function testRegisterRejectsDuplicateEmail(): void
     {
         $this->registerAndLogin('alice@talaria.test');
