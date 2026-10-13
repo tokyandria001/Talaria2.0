@@ -3,11 +3,16 @@
 namespace App\Controller;
 
 use App\Entity\Article;
-use App\Entity\ArticleLike;
 use App\Entity\Comment;
+use App\Entity\Expense;
+use App\Entity\Friendship;
+use App\Entity\GroupMember;
 use App\Entity\Place;
 use App\Entity\Trip;
+use App\Entity\TripMessage;
 use App\Entity\User;
+use App\Service\Blocking;
+use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -55,6 +60,20 @@ class ProfileController extends AbstractController
         if (isset($data['travelPace'])) $user->setTravelPace($data['travelPace']);
         if (isset($data['favoriteTransport'])) $user->setFavoriteTransport($data['favoriteTransport']);
         if (isset($data['interests']) && is_array($data['interests'])) $user->setInterests($data['interests']);
+
+        // Profil et paramètres (maquettes 27 à 37)
+        if (array_key_exists('bio', $data))   $user->setBio(trim((string) $data['bio']) ?: null);
+        if (array_key_exists('phone', $data)) $user->setPhone(trim((string) $data['phone']) ?: null);
+        foreach (['hasCar' => 'setHasCar', 'hasDrivingLicense' => 'setHasDrivingLicense', 'profilePublic' => 'setProfilePublic'] as $key => $setter) {
+            if (array_key_exists($key, $data)) $user->$setter((bool) $data[$key]);
+        }
+        if (array_key_exists('invitePolicy', $data)) $user->setInvitePolicy((string) $data['invitePolicy']);
+        if (isset($data['travelPreferences']) && is_array($data['travelPreferences'])) {
+            $user->setTravelPreferences($this->cleanTravelPreferences($data['travelPreferences'], $user->getTravelPreferences()));
+        }
+        if (isset($data['settings']) && is_array($data['settings'])) {
+            $user->setSettings($this->cleanSettings($data['settings'], $user->getSettings()));
+        }
 
         $errors = $validator->validate($user);
         if (count($errors) > 0) return $this->validationError($errors);
@@ -109,12 +128,13 @@ class ProfileController extends AbstractController
         return $this->json(['profilePicture' => $publicPath]);
     }
 
+    /**
+     * Demande de suppression du compte (mot de passe requis) : effective 30 jours plus tard,
+     * par la commande app:purge-deleted-accounts. Annulable d'ici là avec POST /restore.
+     */
     #[Route('', name: 'delete', methods: ['DELETE'])]
-    public function deleteAccount(
-        Request $request,
-        EntityManagerInterface $em,
-        UserPasswordHasherInterface $hasher,
-    ): JsonResponse {
+    public function deleteAccount(Request $request, UserPasswordHasherInterface $hasher): JsonResponse
+    {
         /** @var User $me */
         $me   = $this->getUser();
         $data = json_decode($request->getContent(), true) ?? [];
@@ -126,47 +146,93 @@ class ProfileController extends AbstractController
             return $this->json(['message' => 'Mot de passe incorrect.'], 401);
         }
 
-        // 1. Likes du user sur les articles des autres
-        foreach ($em->getRepository(ArticleLike::class)->findBy(['user' => $me]) as $like) {
-            $em->remove($like);
+        if (!$me->getDeletionRequestedAt()) {
+            $me->setDeletionRequestedAt(new \DateTimeImmutable());
+            $this->em->flush();
         }
 
-        // 2. Commentaires du user sur les articles des autres
-        foreach ($em->getRepository(Comment::class)->findBy(['author' => $me]) as $comment) {
-            $em->remove($comment);
-        }
+        return $this->json([
+            'message' => sprintf('Votre compte sera supprimé le %s. Reconnectez-vous d\'ici là pour annuler.', $me->getDeletionScheduledFor()->format('d/m/Y')),
+            'deletionScheduledFor' => $me->getDeletionScheduledFor()->format('Y-m-d'),
+        ]);
+    }
 
-        $em->flush();
+    /** Annuler la suppression demandée */
+    #[Route('/restore', name: 'restore', methods: ['POST'])]
+    public function restore(): JsonResponse
+    {
+        /** @var User $me */
+        $me = $this->getUser();
+        $me->setDeletionRequestedAt(null);
+        $this->em->flush();
 
-        // 3. Pour chaque article du user : supprimer likes + comments + article
-        foreach ($em->getRepository(Article::class)->findBy(['author' => $me]) as $article) {
-            foreach ($em->getRepository(ArticleLike::class)->findBy(['article' => $article]) as $like) {
-                $em->remove($like);
-            }
-            foreach ($em->getRepository(Comment::class)->findBy(['article' => $article]) as $comment) {
-                $em->remove($comment);
-            }
-            // Supprimer le fichier cover si présent
-            if ($article->getCoverImage()) {
-                $path = $this->getParameter('kernel.project_dir') . '/public' . $article->getCoverImage();
-                if (file_exists($path)) unlink($path);
-            }
-            $em->remove($article);
-        }
+        return $this->json(['user' => $this->serializeUser($me)]);
+    }
 
-        $em->flush();
+    /** Export RGPD : toutes les données du compte, dans un fichier JSON téléchargeable */
+    #[Route('/export', name: 'export', methods: ['GET'])]
+    public function export(): JsonResponse
+    {
+        /** @var User $me */
+        $me = $this->getUser();
+        $date = fn (?\DateTimeInterface $d) => $d?->format(\DateTimeInterface::ATOM);
 
-        // 4. Supprimer la photo de profil
-        if ($me->getProfilePicture()) {
-            $path = $this->getParameter('kernel.project_dir') . '/public' . $me->getProfilePicture();
-            if (file_exists($path)) unlink($path);
-        }
+        $friendships = $this->em->createQuery(
+            'SELECT f FROM App\Entity\Friendship f WHERE f.requester = :me OR f.addressee = :me',
+        )->setParameter('me', $me)->getResult();
 
-        // 5. Supprimer le compte
-        $em->remove($me);
-        $em->flush();
+        $data = [
+            'exportedAt' => $date(new \DateTimeImmutable()),
+            'account'    => $this->serializeUser($me),
+            'trips'      => array_map(fn (Trip $t) => [
+                'id' => $t->getId(), 'title' => $t->getTitle(), 'destination' => $t->getDestination(),
+                'departureCity' => $t->getDepartureCity(),
+                'startDate' => $t->getStartDate()->format('Y-m-d'), 'endDate' => $t->getEndDate()->format('Y-m-d'),
+                'budget' => $t->getBudget(), 'travelers' => $t->getTravelers(),
+            ], $this->em->getRepository(Trip::class)->findBy(['user' => $me])),
+            'groups' => array_map(fn (GroupMember $m) => [
+                'group' => $m->getGroup()->getName(), 'role' => $m->getRole(), 'status' => $m->getStatus(),
+            ], $this->em->getRepository(GroupMember::class)->findBy(['user' => $me])),
+            'friends' => array_map(fn (Friendship $f) => [
+                'user' => UserPresenter::public($f->otherThan($me)), 'accepted' => $f->isAccepted(),
+                'since' => $date($f->getAcceptedAt()),
+            ], $friendships),
+            'expensesPaid' => array_map(fn (Expense $e) => [
+                'trip' => $e->getTrip()->getDestination(), 'label' => $e->getLabel(),
+                'amount' => $e->getAmountCents() / 100, 'category' => $e->getCategory(), 'createdAt' => $date($e->getCreatedAt()),
+            ], $this->em->getRepository(Expense::class)->findBy(['paidBy' => $me])),
+            'messages' => array_map(fn (TripMessage $m) => [
+                'trip' => $m->getTrip()->getDestination(), 'body' => $m->getBody(), 'createdAt' => $date($m->getCreatedAt()),
+            ], $this->em->getRepository(TripMessage::class)->findBy(['author' => $me])),
+            'articles' => array_map(fn (Article $a) => [
+                'title' => $a->getTitle(), 'category' => $a->getCategory(), 'content' => $a->getContent(),
+            ], $this->em->getRepository(Article::class)->findBy(['author' => $me])),
+            'comments' => array_map(fn (Comment $c) => [
+                'article' => $c->getArticle()->getTitle(), 'content' => $c->getContent(),
+            ], $this->em->getRepository(Comment::class)->findBy(['author' => $me])),
+            'places' => array_map(fn (Place $p) => [
+                'name' => $p->getName(), 'address' => $p->getAddress(), 'tags' => $p->getTags(),
+                'latitude' => $p->getLatitude(), 'longitude' => $p->getLongitude(),
+            ], $this->em->getRepository(Place::class)->findBy(['createdBy' => $me])),
+        ];
 
-        return $this->json(null, 204);
+        $response = new JsonResponse($data, 200, [], false);
+        $response->setEncodingOptions(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $response->headers->set('Content-Disposition', sprintf('attachment; filename="talaria-mes-donnees-%s.json"', date('Y-m-d')));
+
+        return $response;
+    }
+
+    /** Personnes que j'ai bloquées */
+    #[Route('/blocked', name: 'blocked', methods: ['GET'])]
+    public function blocked(Blocking $blocking): JsonResponse
+    {
+        /** @var User $me */
+        $me = $this->getUser();
+
+        return $this->json(array_map(fn ($b) => UserPresenter::public($b->getBlocked()) + [
+            'blockedAt' => $b->getCreatedAt()->format(\DateTimeInterface::ATOM),
+        ], $blocking->blockedBy($me)));
     }
 
     #[Route('/password', name: 'password', methods: ['PUT'])]
@@ -192,6 +258,7 @@ class ProfileController extends AbstractController
         }
 
         $user->setPassword($hasher->hashPassword($user, $data['newPassword']));
+        $user->setPasswordChangedAt(new \DateTimeImmutable());
         $em->flush();
 
         return $this->json(['message' => 'Mot de passe modifié avec succès.']);
@@ -199,20 +266,76 @@ class ProfileController extends AbstractController
 
     private function serializeUser(User $user): array
     {
-        return [
-            'id' => $user->getId(),
-            'email' => $user->getEmail(),
-            'firstName' => $user->getFirstName(),
-            'lastName' => $user->getLastName(),
-            'username' => $user->getPseudo(),
-            'profilePicture' => $user->getProfilePicture(),
-            'averageBudget' => $user->getAverageBudget(),
-            'activityTags' => $user->getActivityTags(),
-            'travelStyle' => $user->getTravelStyle(),
-            'travelPace' => $user->getTravelPace(),
-            'favoriteTransport' => $user->getFavoriteTransport(),
-            'interests' => $user->getInterests(),
-            'createdAt' => $user->getCreatedAt()?->format(\DateTimeInterface::ATOM),
-        ];
+        return UserPresenter::self($user);
+    }
+
+    /** Préférences de voyage : seules les valeurs connues sont gardées */
+    private function cleanTravelPreferences(array $input, array $current): array
+    {
+        foreach (User::TRAVEL_PREFERENCES as $key => $allowed) {
+            if (isset($input[$key]) && is_array($input[$key])) {
+                $current[$key] = array_values(array_intersect($allowed, array_map('strval', $input[$key])));
+            }
+        }
+        foreach (['ecoFriendly', 'directFlightsOnly'] as $key) {
+            if (array_key_exists($key, $input)) $current[$key] = (bool) $input[$key];
+        }
+        return $current;
+    }
+
+    /** Réglages : seules les clés connues (DEFAULT_SETTINGS) sont gardées, avec leur type */
+    private function cleanSettings(array $input, array $current): array
+    {
+        foreach (User::DEFAULT_SETTINGS['notifications'] as $key => $_) {
+            if (isset($input['notifications']) && array_key_exists($key, (array) $input['notifications'])) {
+                $current['notifications'][$key] = (bool) $input['notifications'][$key];
+            }
+        }
+        if (array_key_exists('sharePosition', $input)) $current['sharePosition'] = (bool) $input['sharePosition'];
+        // Seuls le français et l'euro sont disponibles pour l'instant
+        if (($input['language'] ?? null) === 'fr') $current['language'] = 'fr';
+        if (($input['currency'] ?? null) === 'EUR') $current['currency'] = 'EUR';
+
+        $r = $input['reimbursements'] ?? null;
+        if (is_array($r)) {
+            foreach (['remindDebts', 'roundHalfEuro'] as $key) {
+                if (array_key_exists($key, $r)) $current['reimbursements'][$key] = (bool) $r[$key];
+            }
+            if (isset($r['methods']) && is_array($r['methods'])) {
+                $current['reimbursements']['methods'] = $this->cleanMethods($r['methods']);
+            }
+        }
+        return $current;
+    }
+
+    /**
+     * Moyens de remboursement : Lydia (numéro), PayPal (email ou lien), Wero (numéro),
+     * virement (titulaire + 4 derniers chiffres de l'IBAN : jamais l'IBAN complet).
+     */
+    private function cleanMethods(array $methods): array
+    {
+        $clean = [];
+        foreach (array_slice($methods, 0, 5) as $m) {
+            if (!is_array($m)) continue;
+            $type = (string) ($m['type'] ?? '');
+            if (!in_array($type, ['lydia', 'paypal', 'wero', 'virement'], true)) continue;
+            $item = ['type' => $type, 'isDefault' => (bool) ($m['isDefault'] ?? false)];
+            if ($type === 'virement') {
+                // Seuls les 4 derniers chiffres sont gardés, même si l'IBAN entier est saisi
+                $last4 = substr(preg_replace('/\D/', '', (string) ($m['ibanLast4'] ?? '')), -4);
+                if (strlen($last4) !== 4) throw new \App\Exception\InvalidInputException('Indiquez les 4 derniers chiffres de l\'IBAN.');
+                $item['ibanLast4'] = $last4;
+                $item['holder'] = mb_substr(trim((string) ($m['holder'] ?? '')), 0, 80) ?: null;
+            } else {
+                $handle = mb_substr(trim((string) ($m['handle'] ?? '')), 0, 120);
+                if ($handle === '') throw new \App\Exception\InvalidInputException('Indiquez le numéro ou l\'adresse du moyen de remboursement.');
+                $item['handle'] = $handle;
+            }
+            $clean[] = $item;
+        }
+        // Un seul moyen par défaut (le premier coché, sinon le premier)
+        $default = array_search(true, array_column($clean, 'isDefault'), true);
+        foreach ($clean as $i => &$item) $item['isDefault'] = $i === ($default === false ? 0 : $default);
+        return $clean;
     }
 }

@@ -6,6 +6,7 @@ use App\Entity\Friendship;
 use App\Entity\Notification;
 use App\Entity\User;
 use App\Repository\FriendshipRepository;
+use App\Service\Blocking;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -21,6 +22,7 @@ class FriendController extends AbstractController
     public function __construct(
         private EntityManagerInterface $em,
         private FriendshipRepository $friendships,
+        private Blocking $blocking,
     ) {}
 
     /* ── Liste d'amis ─────────────────────────── */
@@ -65,6 +67,10 @@ class FriendController extends AbstractController
         if (!$other) return $this->json(['message' => 'Utilisateur introuvable.'], 404);
         if ($other->getId() === $me->getId()) {
             return $this->json(['message' => 'Vous ne pouvez pas vous ajouter vous-même.'], 400);
+        }
+        // Blocage dans un sens ou dans l'autre : même réponse qu'un compte inexistant
+        if ($this->blocking->between($me, $other)) {
+            return $this->json(['message' => 'Utilisateur introuvable.'], 404);
         }
 
         $existing = $this->friendships->findBetween($me, $other);
@@ -161,6 +167,7 @@ class FriendController extends AbstractController
         $like = '%' . addcslashes(mb_strtolower($q), '%_') . '%';
         $users = $this->em->getRepository(User::class)->createQueryBuilder('u')
             ->where('u.id != :me')
+            ->andWhere('u.deletionRequestedAt IS NULL')
             ->andWhere('LOWER(u.username) LIKE :like OR LOWER(u.firstName) LIKE :like OR LOWER(u.lastName) LIKE :like
                         OR LOWER(CONCAT(CONCAT(COALESCE(u.firstName, \'\'), \' \'), COALESCE(u.lastName, \'\'))) LIKE :like
                         OR LOWER(u.email) = :email')
@@ -170,6 +177,10 @@ class FriendController extends AbstractController
             ->orderBy('u.firstName', 'ASC')
             ->setMaxResults(20)
             ->getQuery()->getResult();
+
+        // Personnes bloquées (dans un sens ou dans l'autre) : absentes des résultats
+        $hidden = $this->blocking->hiddenIdsFor($me);
+        $users = array_values(array_filter($users, fn (User $u) => !in_array($u->getId(), $hidden, true)));
 
         $relations = $this->friendships->findRelationsWith($me, array_map(fn (User $u) => $u->getId(), $users));
 

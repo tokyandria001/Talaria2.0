@@ -46,7 +46,6 @@ export default function RootLayout() {
             <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="friends"       options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="complete-profile" options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen name="settings"      options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="new-trip"      options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="trip/[id]"     options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="planning/[id]" options={{ animation: 'slide_from_right' }} />

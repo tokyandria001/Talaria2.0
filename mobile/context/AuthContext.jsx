@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import client from '../api/client';
@@ -30,6 +31,9 @@ export function AuthProvider({ children }) {
     const { data } = await client.post('/api/auth/login', { username: email, password });
     await SecureStore.setItemAsync('token', data.token);
     await fetchMe();
+    if (data.deletionCanceled) {
+      Alert.alert('Bon retour !', 'La suppression de ton compte a été annulée.');
+    }
   };
 
   const register = async (payload) => {

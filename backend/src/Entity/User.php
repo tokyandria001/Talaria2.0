@@ -16,6 +16,39 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[UniqueEntity(fields: ['username'], message: 'Ce pseudo est déjà pris.', ignoreNull: true)]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
+    public const INVITE_POLICIES = ['everyone', 'friends', 'friends_of_friends', 'nobody'];
+
+    /** Valeurs possibles des préférences de voyage (listes) */
+    public const TRAVEL_PREFERENCES = [
+        'transports'     => ['avion', 'train', 'voiture', 'bus', 'covoiturage'],
+        'accommodations' => ['hotel', 'airbnb', 'auberge', 'camping'],
+        'diets'          => ['vegetarien', 'vegan', 'sans-gluten', 'halal'],
+    ];
+
+    /** Délai avant la suppression effective d'un compte */
+    public const DELETION_DELAY = '+30 days';
+
+    public const DEFAULT_SETTINGS = [
+        'notifications' => [
+            'push'               => true,
+            'groupMessages'      => true,
+            'votes'              => true,
+            'expenses'           => true,
+            'departureReminders' => true,
+            'deals'              => false,
+            'inspiration'        => false,
+            'weeklyDigest'       => true,
+            'newsletter'         => false,
+        ],
+        'sharePosition' => false,
+        'language'      => 'fr',
+        'currency'      => 'EUR',
+        'reimbursements' => [
+            'methods'       => [],
+            'remindDebts'   => true,
+            'roundHalfEuro' => false,
+        ],
+    ];
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -72,6 +105,52 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /** Centres d'intérêt libres */
     #[ORM\Column(type: 'json', nullable: true)]
     private array $interests = [];
+
+    /* ── Profil et paramètres (maquettes 27 à 37) ── */
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Assert\Length(max: 500, maxMessage: 'La bio fait 500 caractères maximum.')]
+    private ?string $bio = null;
+
+    #[ORM\Column(length: 30, nullable: true)]
+    #[Assert\Regex(pattern: '/^\+?[0-9 .()-]{6,30}$/', message: 'Numéro de téléphone invalide.')]
+    private ?string $phone = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $hasCar = false;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $hasDrivingLicense = false;
+
+    /** Profil visible des autres voyageurs (sinon : nom et photo seulement, sauf pour les amis) */
+    #[ORM\Column(options: ['default' => true])]
+    private bool $profilePublic = true;
+
+    /** Qui peut m'inviter dans un groupe : everyone | friends | friends_of_friends | nobody */
+    #[ORM\Column(length: 20, options: ['default' => 'friends'])]
+    #[Assert\Choice(choices: self::INVITE_POLICIES, message: 'Choix invalide.')]
+    private string $invitePolicy = 'friends';
+
+    /**
+     * Préférences de voyage : transports, hébergements, régimes alimentaires (listes),
+     * ecoFriendly, directFlightsOnly (booléens). Voir TRAVEL_PREFERENCES.
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $travelPreferences = null;
+
+    /**
+     * Réglages : notifications (par catégorie), position partagée, langue, devise,
+     * moyens et rappels de remboursement. Voir DEFAULT_SETTINGS.
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $settings = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $passwordChangedAt = null;
+
+    /** Suppression du compte demandée : effective 30 jours après (annulable d'ici là) */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $deletionRequestedAt = null;
 
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $createdAt = null;
@@ -144,4 +223,57 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
+
+    public function getBio(): ?string { return $this->bio; }
+    public function setBio(?string $v): static { $this->bio = $v; return $this; }
+
+    public function getPhone(): ?string { return $this->phone; }
+    public function setPhone(?string $v): static { $this->phone = $v; return $this; }
+
+    public function hasCar(): bool { return $this->hasCar; }
+    public function setHasCar(bool $v): static { $this->hasCar = $v; return $this; }
+
+    public function hasDrivingLicense(): bool { return $this->hasDrivingLicense; }
+    public function setHasDrivingLicense(bool $v): static { $this->hasDrivingLicense = $v; return $this; }
+
+    public function isProfilePublic(): bool { return $this->profilePublic; }
+    public function setProfilePublic(bool $v): static { $this->profilePublic = $v; return $this; }
+
+    public function getInvitePolicy(): string { return $this->invitePolicy; }
+    public function setInvitePolicy(string $v): static { $this->invitePolicy = $v; return $this; }
+
+    /** Préférences de voyage complétées des valeurs par défaut */
+    public function getTravelPreferences(): array
+    {
+        return ($this->travelPreferences ?? []) + [
+            'transports' => [], 'accommodations' => [], 'diets' => [],
+            'ecoFriendly' => false, 'directFlightsOnly' => false,
+        ];
+    }
+    public function setTravelPreferences(array $v): static { $this->travelPreferences = $v; return $this; }
+
+    /** Réglages complétés des valeurs par défaut (une clé ajoutée plus tard a toujours une valeur) */
+    public function getSettings(): array
+    {
+        return array_replace_recursive(self::DEFAULT_SETTINGS, $this->settings ?? []);
+    }
+    public function setSettings(array $v): static { $this->settings = $v; return $this; }
+
+    /** Une catégorie de notifications est-elle activée ? (notifications, votes, expenses...) */
+    public function wantsNotification(string $category): bool
+    {
+        return (bool) ($this->getSettings()['notifications'][$category] ?? true);
+    }
+
+    public function getPasswordChangedAt(): ?\DateTimeImmutable { return $this->passwordChangedAt; }
+    public function setPasswordChangedAt(?\DateTimeImmutable $v): static { $this->passwordChangedAt = $v; return $this; }
+
+    public function getDeletionRequestedAt(): ?\DateTimeImmutable { return $this->deletionRequestedAt; }
+    public function setDeletionRequestedAt(?\DateTimeImmutable $v): static { $this->deletionRequestedAt = $v; return $this; }
+
+    /** Date de suppression effective (null si aucune suppression demandée) */
+    public function getDeletionScheduledFor(): ?\DateTimeImmutable
+    {
+        return $this->deletionRequestedAt?->modify(self::DELETION_DELAY);
+    }
 }

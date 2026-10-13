@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -91,20 +92,6 @@ class AuthController extends AbstractController
 
     private function serializeUser(User $user): array
     {
-        return [
-            'id' => $user->getId(),
-            'email' => $user->getEmail(),
-            'firstName' => $user->getFirstName(),
-            'lastName' => $user->getLastName(),
-            'username' => $user->getPseudo(),
-            'profilePicture' => $user->getProfilePicture(),
-            'averageBudget' => $user->getAverageBudget(),
-            'activityTags' => $user->getActivityTags(),
-            'travelStyle' => $user->getTravelStyle(),
-            'travelPace' => $user->getTravelPace(),
-            'favoriteTransport' => $user->getFavoriteTransport(),
-            'interests' => $user->getInterests(),
-            'createdAt' => $user->getCreatedAt()?->format(\DateTimeInterface::ATOM),
-        ];
+        return UserPresenter::self($user);
     }
 }

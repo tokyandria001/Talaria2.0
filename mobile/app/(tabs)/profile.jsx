@@ -112,7 +112,7 @@ export default function ProfileScreen() {
             {interests.map(v => <Text key={v} style={s.tag}>{interestLabel(v)}</Text>)}
           </View>
         ) : (
-          <TouchableOpacity onPress={() => router.push({ pathname: '/complete-profile', params: { mode: 'edit' } })}>
+          <TouchableOpacity onPress={() => router.push('/edit-profile')}>
             <Text style={[s.pad, s.link]}>Ajouter vos centres d'intérêt</Text>
           </TouchableOpacity>
         )}
@@ -152,7 +152,7 @@ export default function ProfileScreen() {
 
       {/* Modifier le profil */}
       <TouchableOpacity style={[s.edit, { bottom: bottom + 16 }]} activeOpacity={0.85}
-        onPress={() => router.push({ pathname: '/complete-profile', params: { mode: 'edit' } })}>
+        onPress={() => router.push('/edit-profile')}>
         <Ionicons name="pencil" size={16} color={Colors.white} />
         <Text style={s.editText}>Modifier</Text>
       </TouchableOpacity>

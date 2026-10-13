@@ -336,6 +336,10 @@ class GroupController extends AbstractController
             if (!$this->friendships->findBetween($inviter, $user)?->isAccepted()) {
                 return $this->json(['message' => sprintf('%s ne fait pas partie de vos amis.', UserPresenter::public($user)['displayName'])], 422);
             }
+            // Paramètre « Qui peut m'inviter dans un groupe ? » : Personne
+            if ($user->getInvitePolicy() === 'nobody') {
+                return $this->json(['message' => sprintf('%s n\'accepte pas les invitations dans un groupe.', UserPresenter::public($user)['displayName'])], 422);
+            }
 
             $group->addMember((new GroupMember())->setUser($user)->setInvitedBy($inviter));
             $this->em->persist((new Notification())

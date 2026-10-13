@@ -4,9 +4,10 @@ namespace App\Service;
 
 use App\Entity\User;
 
-/** Représentation publique d'un utilisateur (jamais l'email) : amis, recherche, groupes */
+/** Représentations d'un utilisateur */
 final class UserPresenter
 {
+    /** Représentation publique (jamais l'email) : amis, recherche, groupes */
     public static function public(User $u): array
     {
         $name = trim(($u->getFirstName() ?? '') . ' ' . ($u->getLastName() ?? ''));
@@ -18,6 +19,36 @@ final class UserPresenter
             'lastName'       => $u->getLastName(),
             'displayName'    => $name !== '' ? $name : ($u->getPseudo() ?? 'Voyageur'),
             'profilePicture' => $u->getProfilePicture(),
+        ];
+    }
+
+    /** Compte complet, pour l'utilisateur lui-même (/api/auth/me, /api/profile) */
+    public static function self(User $u): array
+    {
+        return [
+            'id'                => $u->getId(),
+            'email'             => $u->getEmail(),
+            'firstName'         => $u->getFirstName(),
+            'lastName'          => $u->getLastName(),
+            'username'          => $u->getPseudo(),
+            'profilePicture'    => $u->getProfilePicture(),
+            'bio'               => $u->getBio(),
+            'phone'             => $u->getPhone(),
+            'averageBudget'     => $u->getAverageBudget(),
+            'activityTags'      => $u->getActivityTags(),
+            'travelStyle'       => $u->getTravelStyle(),
+            'travelPace'        => $u->getTravelPace(),
+            'favoriteTransport' => $u->getFavoriteTransport(),
+            'interests'         => $u->getInterests(),
+            'hasCar'            => $u->hasCar(),
+            'hasDrivingLicense' => $u->hasDrivingLicense(),
+            'travelPreferences' => $u->getTravelPreferences(),
+            'profilePublic'     => $u->isProfilePublic(),
+            'invitePolicy'      => $u->getInvitePolicy(),
+            'settings'          => $u->getSettings(),
+            'passwordChangedAt' => $u->getPasswordChangedAt()?->format(\DateTimeInterface::ATOM),
+            'deletionScheduledFor' => $u->getDeletionScheduledFor()?->format('Y-m-d'),
+            'createdAt'         => $u->getCreatedAt()?->format(\DateTimeInterface::ATOM),
         ];
     }
 }

@@ -18,6 +18,12 @@ final class GroupJournal
     /** Avec $throttle : un même auteur ne génère qu'un événement de ce type par voyage toutes les 10 minutes */
     private const THROTTLE_WINDOW = '-10 minutes';
 
+    /** Type d'événement → catégorie des réglages de notifications (User::DEFAULT_SETTINGS) */
+    private const CATEGORIES = [
+        'vote' => 'votes', 'vote_result' => 'votes',
+        'expense' => 'expenses', 'settlement' => 'expenses',
+    ];
+
     public function __construct(private EntityManagerInterface $em) {}
 
     public function record(TravelGroup $group, User $actor, string $type, string $message, ?Trip $trip = null, bool $throttle = false, bool $notify = true): void
@@ -31,6 +37,9 @@ final class GroupJournal
         if (!$notify) return;
         foreach ($group->activeMembers() as $member) {
             if ($member->getUser()->getId() === $actor->getId()) continue;
+            // Catégorie désactivée dans les réglages : l'événement reste dans le journal du groupe
+            $category = self::CATEGORIES[$type] ?? null;
+            if ($category && !$member->getUser()->wantsNotification($category)) continue;
             $this->em->persist((new Notification())
                 ->setRecipient($member->getUser())->setFromUser($actor)
                 ->setGroup($group)->setTrip($trip)

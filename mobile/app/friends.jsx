@@ -212,13 +212,16 @@ function SearchTab({ onChanged }) {
 
 /* ── Éléments communs ─────────────────────── */
 function UserRow({ user, subtitle, children }) {
+  const router = useRouter();
   return (
     <View style={s.row}>
-      <UserAvatar user={user} size={44} />
-      <View style={{ flex: 1 }}>
-        <Text style={s.name} numberOfLines={1}>{user.displayName}</Text>
-        {subtitle ? <Text style={s.sub} numberOfLines={1}>{subtitle}</Text> : null}
-      </View>
+      <TouchableOpacity style={s.rowMain} onPress={() => router.push(`/users/${user.id}`)} activeOpacity={0.7}>
+        <UserAvatar user={user} size={44} />
+        <View style={{ flex: 1 }}>
+          <Text style={s.name} numberOfLines={1}>{user.displayName}</Text>
+          {subtitle ? <Text style={s.sub} numberOfLines={1}>{subtitle}</Text> : null}
+        </View>
+      </TouchableOpacity>
       <View style={s.actions}>{children}</View>
     </View>
   );
@@ -239,6 +242,7 @@ function Empty({ icon, text, action }) {
 }
 
 const s = StyleSheet.create({
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   root: { flex: 1, backgroundColor: Colors.sableLune },
 
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8 },
