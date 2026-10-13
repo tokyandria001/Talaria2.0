@@ -8,7 +8,7 @@ import { TAB_BAR_HEIGHT } from '../../constants/Layout';
 
 /**
  * Onglet Découvrir : la carte des lieux et la communauté (articles).
- * Paramètres (envoyés par le menu +) : view=map|community, action=add-place|write
+ * Paramètres (menu + et accueil) : view=map|community, action=add-place|write, shortcut=logements|activites
  */
 export default function DiscoverScreen() {
   const router = useRouter();
@@ -21,7 +21,7 @@ export default function DiscoverScreen() {
   }, [params.view]);
 
   // Une fois l'action traitée, on retire les paramètres pour ne pas la rejouer
-  const clearAction = useCallback(() => router.setParams({ action: undefined, view: undefined }), [router]);
+  const clearAction = useCallback(() => router.setParams({ action: undefined, view: undefined, shortcut: undefined }), [router]);
 
   const header = <DiscoverHeader view={view} onChangeView={setView} />;
 
@@ -30,6 +30,8 @@ export default function DiscoverScreen() {
       header={header}
       autoAdd={params.action === 'add-place'}
       onAutoAddHandled={clearAction}
+      initialShortcut={params.shortcut}
+      onShortcutHandled={clearAction}
       bottomOffset={TAB_BAR_HEIGHT + Math.max(insets.bottom, 12)}
     />
   ) : (

@@ -10,6 +10,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import client from '../api/client';
 import GroupHero from '../components/groups/GroupHero';
 import FriendPickerSheet from '../components/groups/FriendPickerSheet';
+import GroupPickerSheet from '../components/groups/GroupPickerSheet';
 import UserAvatar from '../components/UserAvatar';
 import { Colors } from '../constants/Colors';
 
@@ -59,7 +60,9 @@ export default function NewTripScreen() {
 
   const [step, setStep]     = useState(0);
   const [saving, setSaving] = useState(false);
-  const [group, setGroup]   = useState(null);        // groupe existant (voyage lancé depuis un groupe)
+  const [group, setGroup]   = useState(null);        // groupe existant : lancé depuis un groupe ou choisi ici
+  const [groupId, setGroupId] = useState(presetGroupId);
+  const [groupPicker, setGroupPicker] = useState(false);
   const [friends, setFriends] = useState([]);
   const [selected, setSelected] = useState([]);      // amis invités (ids)
   const [friendQuery, setFriendQuery] = useState('');
@@ -67,7 +70,7 @@ export default function NewTripScreen() {
   const [dateField, setDateField] = useState(null);  // 'start' | 'end' | null
 
   const [f, setF] = useState({
-    destination: '', start: null, end: null, budgetPerPerson: '', wishes: [],
+    destination: typeof params.destination === 'string' ? params.destination : '', start: null, end: null, budgetPerPerson: '', wishes: [],
     transportMode: 'avion', departureCity: '', ticketPrice: '', eachBooksOwnTransport: false,
     distanceKm: '', fuelPrice: '', fuelConsumption: '', tollCost: '',
     accomType: 'airbnb', accomName: '', accomPrice: '', accomAddress: '', accomLink: '',
@@ -77,8 +80,19 @@ export default function NewTripScreen() {
 
   useEffect(() => {
     client.get('/api/friends').then(({ data }) => setFriends(data.map(x => x.user))).catch(() => {});
-    if (presetGroupId) client.get(`/api/groups/${presetGroupId}`).then(({ data }) => setGroup(data)).catch(() => {});
-  }, [presetGroupId]);
+  }, []);
+
+  useEffect(() => {
+    if (!groupId) { setGroup(null); return; }
+    client.get(`/api/groups/${groupId}`).then(({ data }) => setGroup(data)).catch(() => setGroup(null));
+  }, [groupId]);
+
+  // Les amis déjà membres du groupe choisi ne sont pas invités une seconde fois
+  useEffect(() => {
+    if (group && !group.permissions?.canInvite) { setSelected([]); return; }
+    const ids = (group?.members ?? []).map(m => m.user.id);
+    if (ids.length) setSelected(sel => sel.filter(id => !ids.includes(id)));
+  }, [group]);
 
   const memberIds = useMemo(() => (group?.members ?? []).map(m => m.user.id), [group]);
   const invitable = friends.filter(u => !memberIds.includes(u.id));
@@ -98,7 +112,7 @@ export default function NewTripScreen() {
 
   const submit = async () => {
     setSaving(true);
-    let groupId = presetGroupId;
+    let groupId = group?.id ?? null;
     let createdGroup = null;
     try {
       // 1. Groupe : invitations dans le groupe existant, ou nouveau groupe si on invite des amis
@@ -213,6 +227,28 @@ export default function NewTripScreen() {
               <Input placeholder="Exemple : 950 €" keyboardType="number-pad" value={f.budgetPerPerson} onChangeText={set('budgetPerPerson')} />
 
               <Label>Les participants</Label>
+              {group ? (
+                <View style={s.groupChip}>
+                  <Ionicons name="people" size={16} color={Colors.parme} />
+                  <Text style={s.groupChipText} numberOfLines={1}>Groupe « {group.name} »</Text>
+                  {!presetGroupId && (
+                    <TouchableOpacity onPress={() => setGroupPicker(true)} hitSlop={8}>
+                      <Text style={s.groupChipLink}>Changer</Text>
+                    </TouchableOpacity>
+                  )}
+                  {!presetGroupId && (
+                    <TouchableOpacity onPress={() => setGroupId(null)} hitSlop={8} accessibilityLabel="Retirer le groupe">
+                      <Ionicons name="close" size={16} color={Colors.parme} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <TouchableOpacity style={s.groupChip} onPress={() => setGroupPicker(true)} activeOpacity={0.85}>
+                  <Ionicons name="people-outline" size={16} color={Colors.parme} />
+                  <Text style={s.groupChipText}>Partir avec un de mes groupes</Text>
+                  <Ionicons name="chevron-forward" size={16} color={Colors.parme} />
+                </TouchableOpacity>
+              )}
               <View style={s.participants}>
                 {(group?.members ?? []).filter(m => m.status === 'active').map(m => (
                   <View key={m.user.id} style={s.participant}>
@@ -226,10 +262,13 @@ export default function NewTripScreen() {
                     <Text style={s.participantName} numberOfLines={1}>{u.firstName || u.displayName}</Text>
                   </TouchableOpacity>
                 ))}
-                <TouchableOpacity style={s.participant} onPress={() => setPicker(true)}>
-                  <View style={s.addCircle}><Ionicons name="add" size={26} color={Colors.white} /></View>
-                  <Text style={s.participantName}>Ajouter</Text>
-                </TouchableOpacity>
+                {/* Groupe privé : seul l'organisateur peut inviter de nouveaux membres */}
+                {(!group || group.permissions?.canInvite) && (
+                  <TouchableOpacity style={s.participant} onPress={() => setPicker(true)}>
+                    <View style={s.addCircle}><Ionicons name="add" size={26} color={Colors.white} /></View>
+                    <Text style={s.participantName}>Ajouter</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               <Label>Activités souhaitées</Label>
@@ -439,6 +478,12 @@ export default function NewTripScreen() {
         </Modal>
       )}
 
+      <GroupPickerSheet
+        visible={groupPicker}
+        selectedId={group?.id}
+        onPick={(g) => { setGroupId(g.id); setGroupPicker(false); }}
+        onClose={() => setGroupPicker(false)}
+      />
       <FriendPickerSheet
         visible={picker}
         title="Ajouter des participants"
@@ -522,6 +567,12 @@ const s = StyleSheet.create({
   },
   dateText: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14, color: Colors.text },
 
+  groupChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginBottom: 12,
+    borderWidth: 1.5, borderColor: Colors.parme, borderRadius: 100, paddingHorizontal: 14, paddingVertical: 8, maxWidth: '100%',
+  },
+  groupChipText: { flexShrink: 1, fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.parme },
+  groupChipLink: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.parme, textDecorationLine: 'underline' },
   participants:    { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   participant:     { alignItems: 'center', width: 60 },
   participantName: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: Colors.text, marginTop: 4 },

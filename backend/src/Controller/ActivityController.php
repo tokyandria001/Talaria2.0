@@ -171,7 +171,11 @@ class ActivityController extends AbstractController
     /** Activités du voyage triées par date puis créneau. */
     private function planning(Trip $trip): array
     {
-        $activities = $this->em->getRepository(Activity::class)->findBy(['trip' => $trip]);
+        // Les propositions en cours de vote (ou refusées) restent dans l'onglet Votes
+        $activities = array_values(array_filter(
+            $this->em->getRepository(Activity::class)->findBy(['trip' => $trip]),
+            fn (Activity $a) => $a->isInPlanning(),
+        ));
         usort($activities, fn(Activity $a, Activity $b) => [$a->sortKey(), $a->getId()] <=> [$b->sortKey(), $b->getId()]);
 
         return array_map([$this, 'serialize'], $activities);

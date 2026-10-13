@@ -11,6 +11,8 @@ import GroupHero from '../../components/groups/GroupHero';
 import FriendPickerSheet from '../../components/groups/FriendPickerSheet';
 import ActivitySheet from '../../components/trip/ActivitySheet';
 import BudgetTab from '../../components/trip/BudgetTab';
+import VotesTab from '../../components/trip/VotesTab';
+import ChatTab from '../../components/trip/ChatTab';
 import UserAvatar from '../../components/UserAvatar';
 import { Colors } from '../../constants/Colors';
 import { categoryOf } from '../../constants/PlaceCategories';
@@ -45,6 +47,7 @@ export default function TripScreen() {
   const [picker, setPicker]         = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [votesKey, setVotesKey]     = useState(0);       // recharge l'onglet Votes après une proposition
 
   const load = useCallback(async () => {
     try {
@@ -130,6 +133,8 @@ export default function TripScreen() {
         ))}
       </View>
 
+      {/* Le chat a sa propre liste et sa barre de saisie */}
+      {tab === 'Chat' ? <ChatTab trip={trip} bottomInset={insets.bottom} /> : (
       <ScrollView
         contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 110 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={Colors.parme} />}
@@ -215,9 +220,13 @@ export default function TripScreen() {
         )}
 
         {tab === 'Budget' && <BudgetTab trip={trip} />}
-        {tab === 'Votes' && <SoonTab icon="thumbs-up-outline" title="Votes du groupe" text="Bientôt : proposez des activités au groupe, votez « Je participe » ou « Pas pour moi », et les activités validées rejoignent le planning." />}
-        {tab === 'Chat' && <SoonTab icon="chatbubbles-outline" title="Conversation" text="Bientôt : discutez avec les participants du voyage, avec les remboursements et les sondages directement dans la conversation." />}
+        {tab === 'Votes' && (
+          <VotesTab trip={trip} refreshKey={votesKey}
+            onPropose={() => setSheet({ date: currentDay, propose: true })}
+            onChanged={load} />
+        )}
       </ScrollView>
+      )}
 
       {tab === 'Planning' && (
         <View style={[s.footer, { paddingBottom: insets.bottom + 12 }]}>
@@ -243,6 +252,7 @@ export default function TripScreen() {
         onClose={() => setSheet(null)}
         onSaved={onSaved}
         onDeleted={(a) => { setActivities(prev => prev.filter(x => x.id !== a.id)); setSheet(null); }}
+        onProposed={() => { setSheet(null); setTab('Votes'); setVotesKey(k => k + 1); load(); }}
       />
       <FriendPickerSheet visible={picker} excludeIds={trip.participants.map(p => p.id)} onClose={() => setPicker(false)} onConfirm={addParticipants} />
     </View>
@@ -277,14 +287,6 @@ function TimelineItem({ activity: a, onPress }) {
     </View>
   );
 }
-
-const SoonTab = ({ icon, title, text }) => (
-  <View style={[s.empty, { paddingVertical: 40, marginTop: 16 }]}>
-    <Ionicons name={icon} size={40} color={Colors.orchidee} />
-    <Text style={[s.section, { marginTop: 10 }]}>{title}</Text>
-    <Text style={s.emptyText}>{text}</Text>
-  </View>
-);
 
 const s = StyleSheet.create({
   root:   { flex: 1, backgroundColor: Colors.sableLune },

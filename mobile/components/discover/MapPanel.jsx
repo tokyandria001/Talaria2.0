@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -11,6 +11,7 @@ import { comingSoon } from '../AuthUI';
 import MapFiltersSheet, { DEFAULT_FILTERS, applyFilters } from './MapFiltersSheet';
 import PlaceDetailSheet from './PlaceDetailSheet';
 import AddPlaceSheet from './AddPlaceSheet';
+import { CLUSTER_IMAGES, PIN_IMAGES, PIN_ACTIVE_IMAGES } from '../../constants/MarkerImages';
 
 /* Raccourcis du design : Logements et Activités filtrent la carte ; Vols et Destinations arrivent plus tard */
 const SHORTCUTS = [
@@ -27,9 +28,18 @@ const ACTIVITY_TAGS = PLACE_CATEGORIES.flatMap(c => c.tags).filter(t => !LODGING
 const toBbox = (r) => [r.latitude - r.latitudeDelta / 2, r.longitude - r.longitudeDelta / 2, r.latitude + r.latitudeDelta / 2, r.longitude + r.longitudeDelta / 2]
   .map(v => v.toFixed(4)).join(',');
 
+/** Libellé d'une bulle (une image par libellé, voir scripts/generate-markers.py) : 7, 40+, 300+, 5k+, 20k+ */
+const clusterLabel = (n) => {
+  if (n < 10) return String(Math.max(2, n));
+  if (n < 100) return `${Math.floor(n / 10) * 10}+`;
+  if (n < 1000) return `${Math.floor(n / 100) * 100}+`;
+  if (n < 10000) return `${Math.floor(n / 1000)}k+`;
+  return n < 20000 ? '10k+' : n < 50000 ? '20k+' : '50k+';
+};
+
 const FRANCE = { latitude: 46.5, longitude: 2.5, latitudeDelta: 10, longitudeDelta: 10 };
 
-export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffset = 100 }) {
+export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialShortcut, onShortcutHandled, bottomOffset = 100 }) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
 
@@ -65,14 +75,22 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
 
   // Lieux de la zone visible uniquement (près de 100 000 lieux en base) : catégories filtrées par le serveur,
   // rechargement quand la carte bouge, léger délai pendant la frappe et les déplacements
-  const serverTags = useMemo(() => {
-    const chosen = FILTER_CATEGORIES.filter(c => filters.categories.includes(c.value)).flatMap(c => c.tags);
+  const tagsFor = useCallback((categories) => {
+    const chosen = FILTER_CATEGORIES.filter(c => categories.includes(c.value)).flatMap(c => c.tags);
     if (shortcut === 'logements') return chosen.length ? chosen.filter(t => LODGING_TAGS.includes(t)) : LODGING_TAGS;
     if (shortcut === 'activites') return chosen.length ? chosen.filter(t => ACTIVITY_TAGS.includes(t)) : ACTIVITY_TAGS;
     return chosen;
-  }, [filters.categories, shortcut]);
+  }, [shortcut]);
+  const serverTags = useMemo(() => tagsFor(filters.categories), [tagsFor, filters.categories]);
+
+  const hasFilter = serverTags.length > 0 || search !== '';
 
   useEffect(() => {
+    // Carte vide à l'ouverture : les lieux n'apparaissent qu'après le choix d'un filtre
+    if (!hasFilter) {
+      setPlaces([]); setClusters([]); setTruncated(false);
+      return undefined;
+    }
     let cancelled = false;
     const id = setTimeout(() => {
       // Au-delà de 150 lieux dans la zone, le serveur renvoie des bulles regroupées
@@ -84,7 +102,15 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
         .catch(() => {});
     }, 350);
     return () => { cancelled = true; clearTimeout(id); };
-  }, [search, region, serverTags]);
+  }, [search, region, serverTags, hasFilter]);
+
+  // Raccourci choisi depuis l'accueil : la carte s'ouvre déjà filtrée
+  useEffect(() => {
+    if (initialShortcut === 'logements' || initialShortcut === 'activites') {
+      setShortcut(initialShortcut);
+      onShortcutHandled?.();
+    }
+  }, [initialShortcut, onShortcutHandled]);
 
   // Ouverture de l'ajout de lieu depuis le bouton +
   useEffect(() => {
@@ -151,28 +177,19 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
         showsMyLocationButton={false}
       >
         {visible.map(p => {
-          const cat = categoryOf(p);
+          const cat = categoryOf(p).value || 'default';
+          const images = preview?.id === p.id ? PIN_ACTIVE_IMAGES : PIN_IMAGES;
           return (
             <Marker key={p.id} coordinate={{ latitude: p.latitude, longitude: p.longitude }}
-              onPress={(e) => { e.stopPropagation?.(); setPreview(p); }}>
-              <View style={s.pinWrap}>
-                <View style={[s.pin, { backgroundColor: cat.color }, preview?.id === p.id && s.pinActive]}>
-                  <Ionicons name={cat.icon} size={15} color={Colors.white} />
-                </View>
-                <View style={[s.pinTail, { borderTopColor: cat.color }]} />
-              </View>
-            </Marker>
+              image={images[cat] ?? images.default} anchor={{ x: 0.5, y: 1 }}
+              onPress={(e) => { e.stopPropagation?.(); setPreview(p); }} />
           );
         })}
         {clusters.map(c => {
-          const size = c.count < 10 ? 34 : c.count < 100 ? 40 : c.count < 1000 ? 48 : 56;
           return (
             <Marker key={`c${c.latitude},${c.longitude}`} coordinate={{ latitude: c.latitude, longitude: c.longitude }}
-              anchor={{ x: 0.5, y: 0.5 }} onPress={(e) => { e.stopPropagation?.(); zoomInto(c); }}>
-              <View style={[s.cluster, { width: size, height: size, borderRadius: size / 2 }]}>
-                <Text style={s.clusterText}>{c.count >= 1000 ? `${(c.count / 1000).toFixed(c.count < 10000 ? 1 : 0).replace('.', ',')}k` : c.count}</Text>
-              </View>
-            </Marker>
+              image={CLUSTER_IMAGES[clusterLabel(c.count)]} anchor={{ x: 0.5, y: 0.5 }}
+              onPress={(e) => { e.stopPropagation?.(); zoomInto(c); }} />
           );
         })}
       </MapView>
@@ -205,6 +222,12 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
       {preview && <PreviewCard place={preview} onClose={() => setPreview(null)} onOpen={() => setDetail(preview)} onLike={() => toggleLike(preview)} />}
 
       {/* Trop de lieux dans la zone : on n'affiche que les plus populaires */}
+      {!hasFilter && !preview && (
+        <View style={[s.zoomHint, { bottom: bottomOffset + 124 }]} pointerEvents="none">
+          <Text style={s.zoomHintText}>Choisissez un filtre pour afficher les lieux</Text>
+        </View>
+      )}
+
       {truncated && (
         <View style={[s.zoomHint, { bottom: bottomOffset + 124 }]} pointerEvents="none">
           <Text style={s.zoomHintText}>Zoomez pour voir tous les lieux de la zone</Text>
@@ -234,7 +257,9 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, bottomOffs
       <MapFiltersSheet
         visible={showFilters}
         filters={filters}
-        places={places}
+        bbox={toBbox(region)}
+        search={search}
+        tagsFor={tagsFor}
         userLoc={userLoc}
         onApply={(f) => { setFilters(f); setShowFilters(false); }}
         onClose={() => setShowFilters(false)}
@@ -297,24 +322,6 @@ const s = StyleSheet.create({
     backgroundColor: Colors.white, borderRadius: 100, paddingHorizontal: 14, paddingVertical: 10,
   },
   searchInput: { flex: 1, fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14, color: Colors.text, padding: 0 },
-
-  pinWrap:   { alignItems: 'center' },
-  pin: {
-    width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: Colors.white,
-  },
-  pinActive: { transform: [{ scale: 1.2 }] },
-  cluster: {
-    backgroundColor: Colors.parme, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 3, borderColor: 'rgba(255,255,255,0.85)',
-    shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
-  },
-  clusterText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 13, color: Colors.white },
-  pinTail: {
-    width: 0, height: 0, marginTop: -2,
-    borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-  },
 
   preview: {
     position: 'absolute', top: 170, alignSelf: 'center', width: 250,

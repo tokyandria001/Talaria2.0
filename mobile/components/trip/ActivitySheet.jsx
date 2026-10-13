@@ -44,7 +44,7 @@ async function destinationCoords(destination) {
  * « Nouvelle activité » / modification (maquette) : nom, date, heure, prix par personne, catégorie,
  * restos/bars à proximité, tarif spécial, proposer au vote (phase 9).
  */
-export default function ActivitySheet({ visible, trip, days, initial, priceDefaults = {}, onClose, onSaved, onDeleted }) {
+export default function ActivitySheet({ visible, trip, days, initial, priceDefaults = {}, onClose, onSaved, onDeleted, onProposed }) {
   const isEdit = !!initial?.id;
   const [form, setForm]     = useState({});
   const [place, setPlace]   = useState(null);
@@ -61,6 +61,7 @@ export default function ActivitySheet({ visible, trip, days, initial, priceDefau
       price: initial?.price != null ? String(initial.price) : '', category: initial?.category ?? '',
       description: initial?.description ?? '', hasSpecialPrice: initial?.hasSpecialPrice ?? false,
       specialPriceNote: initial?.specialPriceNote ?? '',
+      propose: !initial?.id && !!initial?.propose,
     });
     setPlace(initial?.place ?? null);
   }, [visible, initial, days]);
@@ -109,6 +110,11 @@ export default function ActivitySheet({ visible, trip, days, initial, priceDefau
         placeId: place?.id ?? null,
       };
       if (!form.time) payload.slot = initial?.slot ?? 'apres-midi';
+      if (form.propose && !isEdit) {
+        const { data } = await client.post(`/api/trips/${trip.id}/votes`, payload);
+        onProposed?.(data);
+        return;
+      }
       const { data } = isEdit
         ? await client.patch(`/api/trips/${trip.id}/activities/${initial.id}`, payload)
         : await client.post(`/api/trips/${trip.id}/activities`, payload);
@@ -142,7 +148,7 @@ export default function ActivitySheet({ visible, trip, days, initial, priceDefau
         <View style={{ gap: 10 }}>
           <TouchableOpacity style={[s.btn, saving && { opacity: 0.6 }]} onPress={save} disabled={saving}>
             {!isEdit && <Ionicons name="add" size={18} color={Colors.white} />}
-            <Text style={s.btnText}>{saving ? 'Enregistrement...' : isEdit ? 'Enregistrer' : 'Ajouter au planning'}</Text>
+            <Text style={s.btnText}>{saving ? 'Enregistrement...' : isEdit ? 'Enregistrer' : form.propose ? 'Proposer au vote' : 'Ajouter au planning'}</Text>
           </TouchableOpacity>
           {isEdit && (
             <TouchableOpacity onPress={remove} style={{ alignItems: 'center' }}>
@@ -232,8 +238,10 @@ export default function ActivitySheet({ visible, trip, days, initial, priceDefau
         <TextInput style={s.input} placeholder="Ex : -15 % avec la carte CE" placeholderTextColor="#b9aeb5"
           value={form.specialPriceNote} onChangeText={set('specialPriceNote')} />
       )}
-      <ToggleRow title="Proposer au vote" subtitle="Le budget de chacun est mis à jour si l'activité est validée — bientôt"
-        value={false} onChange={() => comingSoon('Le vote en groupe')} />
+      {!isEdit && (
+        <ToggleRow title="Proposer au vote" subtitle="Le groupe vote ; l'activité rejoint le planning si la majorité participe"
+          value={!!form.propose} onChange={set('propose')} />
+      )}
     </BottomSheet>
   );
 }

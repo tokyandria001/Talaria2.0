@@ -77,6 +77,8 @@ class PlanningGenerator
         $occupied   = [];
         $usedPlaces = [];
         foreach ($repo->findBy(['trip' => $trip]) as $existing) {
+            // Les propositions en vote ou refusées ne réservent pas de créneau
+            if (!$existing->isInPlanning()) continue;
             $occupied[$existing->getDate()->format('Y-m-d') . '|' . $existing->getSlot()] = true;
             if ($existing->getPlace()) $usedPlaces[$existing->getPlace()->getId()] = true;
         }

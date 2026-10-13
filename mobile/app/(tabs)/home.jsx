@@ -1,312 +1,373 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Animated, Dimensions,
+  View, Text, Image, ImageBackground, TextInput, TouchableOpacity, ScrollView, StyleSheet,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import client from '../../api/client';
-import TalariaLogo from '../../components/TalariaLogo';
+import client, { assetUrl } from '../../api/client';
+import { comingSoon } from '../../components/AuthUI';
 import { Colors } from '../../constants/Colors';
-import { useTheme } from '../../context/ThemeContext';
-import { useFadeIn, useSlideUp, useScaleFade } from '../../_hooks/useEntryAnim';
+import { TAB_BAR_HEIGHT } from '../../constants/Layout';
+import { tripPhoto, today, shortDate, daysUntil, initialsOf } from '../../constants/Trips';
 
-const { width } = Dimensions.get('window');
-
-const DAYS_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-const MONTHS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-                   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-
-function todayLabel() {
-  const d = new Date();
-  return `${DAYS_FR[d.getDay()]} ${d.getDate()} ${MONTHS_FR[d.getMonth()]}`;
-}
-
-function greeting(firstName) {
-  const h = new Date().getHours();
-  const name = firstName ? `, ${firstName}` : '';
-  if (h < 5)  return `Bonne nuit${name} 🌙`;
-  if (h < 12) return `Bonjour${name} ☀️`;
-  if (h < 18) return `Bon après-midi${name} 🌤`;
-  return `Bonsoir${name} 🌆`;
-}
-
-const QUICK_ACTIONS = [
-  { key: 'map',       href: { pathname: '/(tabs)/discover', params: { view: 'map' } },       label: 'Carte',       sub: 'Explorez des lieux',       icon: 'map',            bg: '#1a1a2e', iconColor: '#c9b2d7' },
-  { key: 'community', href: { pathname: '/(tabs)/discover', params: { view: 'community' } }, label: 'Communauté',  sub: 'Articles & conseils',      icon: 'people',         bg: '#4f203f', iconColor: '#f5eef8' },
-  { key: 'trips',     href: '/(tabs)/trips',   label: 'Voyages',     sub: 'Planifier & budgéter',     icon: 'airplane',       bg: '#2d1b4e', iconColor: '#c9b2d7' },
-  { key: 'profile',   href: '/(tabs)/profile', label: 'Mon profil',  sub: 'Paramètres & préférences', icon: 'person-circle',  bg: '#3a1830', iconColor: '#f0dacb' },
+/** Raccourcis « Vous êtes à la recherche de ? » : Logements et Activités ouvrent la carte filtrée */
+const SEARCHES = [
+  { value: 'vols',         label: 'Vols',         icon: 'airplane' },
+  { value: 'logements',    label: 'Logements',    icon: 'business' },
+  { value: 'activites',    label: 'Activités',    icon: 'bicycle' },
+  { value: 'destinations', label: 'Destinations', icon: 'earth' },
 ];
 
-const INSPIRATIONS = [
-  { emoji: '🇯🇵', city: 'Tokyo',     tag: 'Asie',    color: '#fef3c7' },
-  { emoji: '🇵🇹', city: 'Lisbonne',  tag: 'Europe',  color: '#dbeafe' },
-  { emoji: '🇲🇦', city: 'Marrakech', tag: 'Afrique', color: '#fce7f3' },
-  { emoji: '🇨🇴', city: 'Medellín',  tag: 'Amérique',color: '#d1fae5' },
-];
+const euros = (v) => `${Math.round(v ?? 0).toLocaleString('fr-FR')} €`;
+
+/**
+ * Préparation du prochain voyage en 6 étapes : destination et dates, transport, budget,
+ * logement, première activité, planning complet (au moins une activité chaque jour).
+ */
+function preparation(trip, accommodations, activities) {
+  const days = new Set(activities.map(a => a.date));
+  const tripDays = Math.max(1, daysUntil(trip.endDate) - daysUntil(trip.startDate) + 1);
+  const steps = [
+    true,
+    !!trip.transportMode,
+    trip.budget != null,
+    accommodations.length > 0,
+    activities.length > 0,
+    days.size >= tripDays,
+  ];
+  return { done: steps.filter(Boolean).length, total: steps.length };
+}
 
 export default function HomeScreen() {
-  const router  = useRouter();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { theme } = useTheme();
-  const insets  = useSafeAreaInsets();
-  const tabBarH = 60 + Math.max(insets.bottom, 8);
 
-  const [tripCount,    setTripCount]    = useState(null);
-  const [articleCount, setArticleCount] = useState(null);
-  const [unreadCount,  setUnreadCount]  = useState(0);
+  const [trips,    setTrips]    = useState([]);
+  const [groups,   setGroups]   = useState([]);
+  const [unread,   setUnread]   = useState(0);
+  const [prep,     setPrep]     = useState(null);
+  const [finances, setFinances] = useState(null);
+  const [idea,     setIdea]     = useState('');
 
-  // Animations
-  const { opacity: headerOp, scale: headerScale } = useScaleFade(0);
-  const { opacity: avatarOp, translateY: avatarY } = useSlideUp(150, 20);
-  const { opacity: cardsOp,  translateY: cardsY  } = useSlideUp(300, 40);
-  const { opacity: inspoOp,  translateY: inspoY  } = useSlideUp(450, 40);
+  const load = useCallback(() => {
+    client.get('/api/notifications/unread-count').then(({ data }) => setUnread(data.count ?? 0)).catch(() => {});
+    client.get('/api/groups').then(({ data }) => setGroups(data.groups ?? [])).catch(() => {});
+    client.get('/api/trips').then(async ({ data }) => {
+      setTrips(data);
 
-  useEffect(() => {
-    client.get('/api/trips').then(r  => setTripCount(r.data.length)).catch(() => {});
-    client.get('/api/articles').then(r => setArticleCount(r.data.articles?.length ?? null)).catch(() => {});
-    client.get('/api/notifications/unread-count').then(r => setUnreadCount(r.data.count ?? 0)).catch(() => {});
-  }, []);
+      // Préparation du prochain voyage
+      const next = data.find(t => t.endDate >= today());
+      if (next) {
+        const [acc, act] = await Promise.all([
+          client.get(`/api/trips/${next.id}/accommodations`).then(r => r.data).catch(() => []),
+          client.get(`/api/trips/${next.id}/activities`).then(r => r.data).catch(() => []),
+        ]);
+        setPrep(preparation(next, Array.isArray(acc) ? acc : [], Array.isArray(act) ? act : []));
+      } else {
+        setPrep(null);
+      }
 
-  const initial = ((user?.firstName?.[0] ?? '') + (user?.lastName?.[0] ?? '') || (user?.email?.[0] ?? '?')).toUpperCase();
+      // Finances : ma part des dépenses et ce que je dois encore, sur mes 10 derniers voyages
+      const budgets = await Promise.all(data.slice(-10).map(t => client.get(`/api/trips/${t.id}/budget`).then(r => r.data).catch(() => null)));
+      let spent = 0, owed = 0;
+      for (const b of budgets) {
+        const mine = b?.balances?.find(x => x.user.id === user?.id);
+        if (!mine) continue;
+        spent += mine.share ?? 0;
+        if (mine.balance < 0) owed += -mine.balance;
+      }
+      setFinances({ spent, owed });
+    }).catch(() => {});
+  }, [user?.id]);
+
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const upcoming = trips.filter(t => t.endDate >= today());
+  const next = upcoming[0];
+  // Voyages à venir d'abord, puis les passés du plus récent au plus ancien
+  const ordered = [...upcoming, ...trips.filter(t => t.endDate < today()).reverse()];
+
+  const pressSearch = (value) => {
+    if (value === 'vols' || value === 'destinations') {
+      comingSoon(value === 'vols' ? 'La recherche de vols' : 'La découverte de destinations');
+      return;
+    }
+    router.navigate({ pathname: '/(tabs)/discover', params: { view: 'map', shortcut: value } });
+  };
+
+  const submitIdea = () => {
+    const destination = idea.trim();
+    router.push(destination ? { pathname: '/new-trip', params: { destination } } : '/new-trip');
+    setIdea('');
+  };
+
+  const name = user?.firstName || user?.username || '';
+  const avatar = assetUrl(user?.profilePicture);
 
   return (
-    <View style={[s.root, { backgroundColor: theme.sableLune }]}>
-      {/* ── Hero header ── */}
-      <Animated.View style={[s.hero, { opacity: headerOp, transform: [{ scale: headerScale }] }]}>
-        <SafeAreaView edges={['top']}>
-          <View style={s.heroTop}>
-            <TalariaLogo height={28} light />
-            <TouchableOpacity style={s.notifBtn} onPress={() => router.push('/notifications')}>
-              <Ionicons name="notifications-outline" size={22} color="rgba(255,255,255,0.8)" />
-              {unreadCount > 0 && (
-                <View style={s.notifBadge}>
-                  <Text style={s.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+    <ScrollView style={s.root} contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: TAB_BAR_HEIGHT + Math.max(insets.bottom, 12) + 24 }}
+      showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
+      {/* En-tête */}
+      <View style={[s.pad, s.header]}>
+        <Text style={s.hello} numberOfLines={1}>Bonjour{name ? ` ${name}` : ''}</Text>
+        <TouchableOpacity onPress={() => router.push('/notifications')} hitSlop={8} style={s.bell}
+          accessibilityLabel={`Notifications${unread ? `, ${unread} non lues` : ''}`}>
+          <Ionicons name="notifications-outline" size={22} color={Colors.parme} />
+          {unread > 0 && <View style={s.bellDot} />}
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.navigate('/(tabs)/profile')} activeOpacity={0.85}>
+          {avatar
+            ? <Image source={{ uri: avatar }} style={s.avatar} />
+            : <View style={[s.avatar, s.avatarEmpty]}><Text style={s.avatarText}>{initialsOf(user)}</Text></View>}
+        </TouchableOpacity>
+      </View>
+
+      {/* Idée de voyage → assistant de création */}
+      <View style={[s.pad, s.search]}>
+        <Ionicons name="search" size={17} color={Colors.text} />
+        <TextInput style={s.searchInput} placeholder="Une idée de voyage ?" placeholderTextColor={Colors.textMuted}
+          value={idea} onChangeText={setIdea} onSubmitEditing={submitIdea} returnKeyType="go" />
+      </View>
+
+      <Text style={[s.pad, s.lookingFor]}>Vous êtes à la recherche de ?</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+        {SEARCHES.map(c => (
+          <TouchableOpacity key={c.value} style={s.chip} onPress={() => pressSearch(c.value)} activeOpacity={0.85}>
+            <Text style={s.chipText}>{c.label}</Text>
+            <Ionicons name={c.icon} size={16} color={Colors.parme} />
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* Prochain voyage */}
+      <View style={s.pad}>
+        {next ? (
+          <TouchableOpacity activeOpacity={0.9} onPress={() => router.push(`/trip/${next.id}`)}>
+            <ImageBackground source={tripPhoto(next)} style={s.nextCard} imageStyle={s.nextImage} resizeMode="cover">
+              <View style={s.nextVeil} />
+              <View style={s.nextTop}>
+                <View style={s.nextPill}>
+                  <Ionicons name="airplane" size={13} color={Colors.parme} />
+                  <Text style={s.nextPillText}>
+                    Prochain voyage{daysUntil(next.startDate) > 0 ? ` · J-${daysUntil(next.startDate)}` : ' · en cours'}
+                  </Text>
                 </View>
-              )}
+                <Avatars people={next.participants?.length ? next.participants : [next.createdBy]} />
+              </View>
+
+              <View>
+                <Text style={s.nextTitle} numberOfLines={1}>{next.title || next.destination}</Text>
+                <Text style={s.nextSub} numberOfLines={1}>
+                  {next.title ? `${next.destination} · ` : ''}{shortDate(next.startDate)} → {shortDate(next.endDate)} · {next.travelers} voyageur{next.travelers > 1 ? 's' : ''}
+                </Text>
+                <View style={s.nextBottom}>
+                  <View style={{ flex: 1 }}>
+                    {prep && (
+                      <>
+                        <Text style={s.prepText}>Préparation · {prep.done}/{prep.total} étapes</Text>
+                        <View style={s.prepTrack}><View style={[s.prepFill, { width: `${(prep.done / prep.total) * 100}%` }]} /></View>
+                      </>
+                    )}
+                  </View>
+                  <View style={s.planningBtn}>
+                    <Text style={s.planningText}>Planning</Text>
+                    <Ionicons name="arrow-forward" size={15} color={Colors.parme} />
+                  </View>
+                </View>
+              </View>
+            </ImageBackground>
+          </TouchableOpacity>
+        ) : (
+          <View style={s.emptyTrip}>
+            <Text style={s.emptyTitle}>Aucun voyage prévu</Text>
+            <Text style={s.emptySub}>Choisissez une destination et des dates, Talaria s'occupe du reste.</Text>
+            <TouchableOpacity style={s.emptyBtn} onPress={() => router.push('/new-trip')}>
+              <Ionicons name="add" size={18} color={Colors.white} />
+              <Text style={s.emptyBtnText}>Créer un voyage</Text>
             </TouchableOpacity>
           </View>
+        )}
+      </View>
 
-          <View style={s.heroBody}>
-            {/* Avatar */}
-            <Animated.View style={[s.avatarWrap, { opacity: avatarOp, transform: [{ translateY: avatarY }] }]}>
-              <View style={s.avatar}>
-                <Text style={s.avatarText}>{initial}</Text>
-              </View>
-              {/* Glow ring */}
-              <View style={s.avatarRing} />
-            </Animated.View>
-
-            <Animated.View style={{ opacity: avatarOp, transform: [{ translateY: avatarY }] }}>
-              <Text style={s.greetText}>{greeting(user?.firstName)}</Text>
-              <Text style={s.dateText}>{todayLabel()}</Text>
-            </Animated.View>
-          </View>
-
-          {/* Accroche */}
-          <Animated.View style={[s.taglineWrap, { opacity: avatarOp, transform: [{ translateY: avatarY }] }]}>
-            <Text style={s.tagline}>Voyagez plus. Dépensez moins.{'\n'}Vivez mieux.</Text>
-          </Animated.View>
-
-          {/* Stat chips */}
-          <Animated.View style={[s.chips, { opacity: avatarOp, transform: [{ translateY: avatarY }] }]}>
-            <View style={s.chip}>
-              <Ionicons name="airplane-outline" size={14} color="rgba(255,255,255,0.9)" />
-              <Text style={s.chipText}>
-                {tripCount == null ? '…' : tripCount} voyage{tripCount !== 1 ? 's' : ''}
-              </Text>
-            </View>
-            <View style={s.chipDivider} />
-            <View style={s.chip}>
-              <Ionicons name="reader-outline" size={14} color="rgba(255,255,255,0.9)" />
-              <Text style={s.chipText}>
-                {articleCount == null ? '…' : articleCount} article{articleCount !== 1 ? 's' : ''} dans la communauté
-              </Text>
-            </View>
-          </Animated.View>
-        </SafeAreaView>
-
-        {/* Decorative blobs */}
-        <View style={[s.blob, { top: -40, right: -40, width: 160, height: 160, opacity: 0.12 }]} />
-        <View style={[s.blob, { bottom: 20, left: -30, width: 100, height: 100, opacity: 0.08 }]} />
-      </Animated.View>
-
-      {/* ── Scrollable content ── */}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={[s.scroll, { paddingBottom: tabBarH + 20 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Quick actions */}
-        <Animated.View style={{ opacity: cardsOp, transform: [{ translateY: cardsY }] }}>
-          <Text style={[s.sectionTitle, { color: theme.text }]}>Explorer</Text>
-          <View style={s.actionsGrid}>
-            {QUICK_ACTIONS.map((a) => (
-              <TouchableOpacity
-                key={a.key}
-                style={[s.actionCard, { backgroundColor: a.bg }]}
-                activeOpacity={0.82}
-                onPress={() => router.navigate(a.href)}
-              >
-                <View style={[s.actionIconWrap, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
-                  <Ionicons name={a.icon} size={26} color={a.iconColor} />
-                </View>
-                <Text style={s.actionLabel}>{a.label}</Text>
-                <Text style={s.actionSub}>{a.sub}</Text>
-                <Ionicons name="arrow-forward" size={14} color="rgba(255,255,255,0.4)" style={{ marginTop: 8 }} />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Animated.View>
-
-        {/* Inspirations */}
-        <Animated.View style={{ opacity: inspoOp, transform: [{ translateY: inspoY }] }}>
-          <Text style={[s.sectionTitle, { color: theme.text }]}>Destinations tendance</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.inspoRow}>
-            {INSPIRATIONS.map((d) => (
-              <View key={d.city} style={[s.inspoCard, { backgroundColor: d.color }]}>
-                <Text style={s.inspoEmoji}>{d.emoji}</Text>
-                <Text style={s.inspoCity}>{d.city}</Text>
-                <View style={s.inspoTag}>
-                  <Text style={s.inspoTagText}>{d.tag}</Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </Animated.View>
-
-        {/* CTA banner */}
-        <Animated.View style={[s.banner, { opacity: inspoOp, transform: [{ translateY: inspoY }], backgroundColor: theme.white, borderColor: theme.border }]}>
-          <View style={s.bannerLeft}>
-            <Text style={[s.bannerTitle, { color: theme.text }]}>Planifiez votre prochain voyage</Text>
-            <Text style={[s.bannerSub, { color: theme.textMuted }]}>Budget, transport, réservations — tout en un.</Text>
-          </View>
-          <TouchableOpacity style={s.bannerBtn} onPress={() => router.push('/(tabs)/trips')}>
-            <Ionicons name="add" size={20} color={Colors.white} />
+      {/* Groupes */}
+      <Text style={[s.pad, s.section]}>Vos groupes de voyage</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
+        {groups.map(g => (
+          <TouchableOpacity key={g.id} style={s.group} onPress={() => router.push(`/groups/${g.id}`)} activeOpacity={0.85}>
+            {g.photo
+              ? <Image source={{ uri: assetUrl(g.photo) }} style={s.groupPhoto} />
+              : <GroupFaces members={g.membersPreview ?? []} />}
+            <Text style={s.groupName} numberOfLines={1}>{g.name}</Text>
           </TouchableOpacity>
-        </Animated.View>
+        ))}
+        <TouchableOpacity style={s.group} onPress={() => router.push('/groups/new')} activeOpacity={0.85}>
+          <View style={[s.groupPhoto, s.groupNew]}><Ionicons name="add" size={28} color={Colors.white} /></View>
+          <Text style={s.groupName}>Créer</Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      {/* Voyages */}
+      <Text style={[s.pad, s.section]}>Vos voyages</Text>
+      {ordered.length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
+          {ordered.map(t => (
+            <TouchableOpacity key={t.id} style={s.trip} onPress={() => router.push(`/trip/${t.id}`)} activeOpacity={0.85}>
+              <Image source={tripPhoto(t)} style={s.tripPhoto} resizeMode="cover" />
+              <Text style={s.tripName} numberOfLines={1}>{t.title || t.destination}</Text>
+              <Text style={s.tripDates}>{shortDate(t.startDate)} → {shortDate(t.endDate)}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      ) : (
+        <Text style={[s.pad, s.muted]}>Vos voyages apparaîtront ici.</Text>
+      )}
+
+      {/* Finances */}
+      <View style={s.finances}>
+        <Text style={s.financesTitle}>Vos finances</Text>
+        <View style={s.financeRow}>
+          <FinanceCard icon="card-outline" value={finances ? euros(finances.spent) : '…'} label="Dépensés" />
+          <FinanceCard icon="cash-outline" value={finances ? euros(finances.owed) : '…'} label="À rembourser" />
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+/** Pastilles des participants (3 visibles, puis « +N ») */
+function Avatars({ people }) {
+  const shown = people.filter(Boolean).slice(0, 3);
+  const extra = people.length - shown.length;
+  return (
+    <View style={s.faces}>
+      {shown.map((p, i) => (
+        <View key={p.id ?? i} style={[s.face, i > 0 && { marginLeft: -10 }]}>
+          {p.profilePicture
+            ? <Image source={{ uri: assetUrl(p.profilePicture) }} style={s.faceImg} />
+            : <Text style={s.faceText}>{initialsOf(p)}</Text>}
+        </View>
+      ))}
+      {extra > 0 && <View style={[s.face, s.faceExtra, { marginLeft: -10 }]}><Text style={s.faceExtraText}>+{extra}</Text></View>}
+    </View>
+  );
+}
+
+/** Groupe sans photo : initiales des deux premiers membres dans le rond */
+function GroupFaces({ members }) {
+  return (
+    <View style={[s.groupPhoto, s.groupFaces]}>
+      {members.length
+        ? members.slice(0, 2).map((m, i) => <Text key={m.id} style={[s.groupInitials, i > 0 && { marginLeft: 2 }]}>{initialsOf(m)}</Text>)
+        : <Ionicons name="people" size={24} color={Colors.parme} />}
+    </View>
+  );
+}
+
+function FinanceCard({ icon, value, label }) {
+  return (
+    <View style={s.financeCard}>
+      <View style={s.financeTop}>
+        <Ionicons name={icon} size={20} color={Colors.parme} />
+        <Text style={s.financeValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+      </View>
+      <Text style={s.financeLabel}>{label}</Text>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f4f0f7' },
+  root: { flex: 1, backgroundColor: Colors.sableLune },
+  pad:  { marginHorizontal: 18 },
+  muted: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted },
 
-  /* Hero */
-  hero: {
-    backgroundColor: Colors.parme,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    overflow: 'hidden',
-  },
-  heroTop: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingTop: 8, marginBottom: 20,
-  },
-  notifBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  notifBadge: {
-    position: 'absolute', top: -2, right: -2,
-    minWidth: 17, height: 17, borderRadius: 9,
-    backgroundColor: '#ef4444', borderWidth: 1.5, borderColor: Colors.parme,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
-  },
-  notifBadgeText: { fontSize: 9, fontFamily: 'BricolageGrotesque_700Bold', color: '#fff' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
+  hello:  { flex: 1, fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 26, color: Colors.parme },
+  bell:   { padding: 2 },
+  bellDot: { position: 'absolute', top: 2, right: 3, width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.error },
+  avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: Colors.parme },
+  avatarEmpty: { backgroundColor: Colors.parme, alignItems: 'center', justifyContent: 'center' },
+  avatarText:  { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 15, color: Colors.white },
 
-  heroBody: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 20 },
-
-  avatarWrap: { position: 'relative' },
-  avatar: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: Colors.orchidee,
-    alignItems: 'center', justifyContent: 'center',
-    zIndex: 2,
+  search: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: Colors.white, borderRadius: 100, paddingHorizontal: 16, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#ece3e7',
   },
-  avatarRing: {
-    position: 'absolute', inset: -4,
-    borderRadius: 32, borderWidth: 2,
-    borderColor: 'rgba(201,178,215,0.4)',
-    zIndex: 1,
+  searchInput: { flex: 1, fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14, color: Colors.text, padding: 0 },
+
+  lookingFor: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.text, marginTop: 14, marginBottom: 8 },
+  chips: { paddingHorizontal: 18, gap: 8 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.white, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+    borderWidth: 1, borderColor: '#ece3e7',
   },
-  avatarText: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 20, color: Colors.parme },
+  chipText: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.text },
 
-  greetText: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 20, color: Colors.white, lineHeight: 26 },
-  dateText:  { fontFamily: 'BricolageGrotesque_400Regular',  fontSize: 13, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
-
-  taglineWrap: { marginBottom: 18 },
-  tagline: {
-    fontFamily: 'BricolageGrotesque_600SemiBold',
-    fontSize: 15, color: 'rgba(255,255,255,0.9)',
-    lineHeight: 22, letterSpacing: 0.2,
+  nextCard:  { height: 200, marginTop: 20, padding: 14, justifyContent: 'space-between' },
+  nextImage: { borderRadius: 20 },
+  nextVeil:  { ...StyleSheet.absoluteFillObject, borderRadius: 20, backgroundColor: 'rgba(30,8,22,0.38)' },
+  nextTop:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  nextPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 100, paddingHorizontal: 10, paddingVertical: 5,
   },
-
-  chips: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  chip:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  chipText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: 'rgba(255,255,255,0.85)' },
-  chipDivider: { width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.25)' },
-
-  blob: { position: 'absolute', borderRadius: 999, backgroundColor: Colors.orchidee },
-
-  /* Scroll */
-  scroll: { padding: 16 },
-
-  sectionTitle: {
-    fontFamily: 'BricolageGrotesque_800ExtraBold',
-    fontSize: 17, color: Colors.text,
-    marginTop: 20, marginBottom: 12,
+  nextPillText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 11, color: Colors.parme },
+  nextTitle: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 30, color: Colors.white },
+  nextSub:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
+  nextBottom: { flexDirection: 'row', alignItems: 'flex-end', gap: 14, marginTop: 10 },
+  prepText:  { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.9)', marginBottom: 5 },
+  prepTrack: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)' },
+  prepFill:  { height: 4, borderRadius: 2, backgroundColor: Colors.white },
+  planningBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.white, borderRadius: 100, paddingHorizontal: 16, paddingVertical: 9,
   },
+  planningText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.parme },
 
-  /* Grid */
-  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  actionCard: {
-    width: (width - 42) / 2,
-    borderRadius: 20, padding: 18,
-    justifyContent: 'flex-end',
-    minHeight: 140,
+  faces: { flexDirection: 'row', alignItems: 'center' },
+  face: {
+    width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: Colors.white,
+    backgroundColor: Colors.orchidee, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
-  actionIconWrap: {
-    width: 44, height: 44, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 'auto',
-  },
-  actionLabel: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 15, color: Colors.white, marginTop: 10 },
-  actionSub:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 },
+  faceImg:  { width: '100%', height: '100%' },
+  faceText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 10, color: Colors.parme },
+  faceExtra:     { backgroundColor: Colors.parmeLight },
+  faceExtraText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 10, color: Colors.parme },
 
-  /* Inspirations */
-  inspoRow: { marginHorizontal: -4 },
-  inspoCard: {
-    width: 120, borderRadius: 18,
-    padding: 16, marginHorizontal: 4,
-    alignItems: 'center', gap: 6,
+  emptyTrip: { marginTop: 20, backgroundColor: Colors.parme, borderRadius: 20, padding: 18 },
+  emptyTitle: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 20, color: Colors.white },
+  emptySub:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
+  emptyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 100, paddingHorizontal: 16, paddingVertical: 9,
   },
-  inspoEmoji: { fontSize: 34 },
-  inspoCity:  { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: Colors.text },
-  inspoTag:   { backgroundColor: 'rgba(0,0,0,0.08)', borderRadius: 100, paddingVertical: 3, paddingHorizontal: 10 },
-  inspoTagText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 10, color: Colors.text },
+  emptyBtnText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.white },
 
-  /* Banner */
-  banner: {
-    marginTop: 20, backgroundColor: Colors.white,
-    borderRadius: 20, padding: 18,
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1.5, borderColor: Colors.border,
-    gap: 12,
-  },
-  bannerLeft:  { flex: 1 },
-  bannerTitle: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: Colors.text },
-  bannerSub:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.textMuted, marginTop: 2 },
-  bannerBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: Colors.parme,
-    alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-  },
+  section: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 20, color: Colors.parme, marginTop: 24, marginBottom: 12 },
+  row: { paddingHorizontal: 18, gap: 12 },
+
+  group:      { width: 68, alignItems: 'center' },
+  groupPhoto: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: Colors.white },
+  groupFaces: { backgroundColor: Colors.parmeLight, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  groupInitials: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 12, color: Colors.parme },
+  groupNew:   { backgroundColor: Colors.parme, alignItems: 'center', justifyContent: 'center' },
+  groupName:  { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.text, marginTop: 6 },
+
+  trip:      { width: 112 },
+  tripPhoto: { width: 112, height: 100, borderRadius: 14 },
+  tripName:  { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.text, marginTop: 6, textAlign: 'center' },
+  tripDates: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: Colors.textMuted, textAlign: 'center' },
+
+  finances: { backgroundColor: Colors.parme, marginTop: 28, paddingHorizontal: 18, paddingVertical: 20 },
+  financesTitle: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 20, color: Colors.white, marginBottom: 12 },
+  financeRow: { flexDirection: 'row', gap: 12 },
+  financeCard: { flex: 1, backgroundColor: Colors.white, borderRadius: 16, padding: 12 },
+  financeTop:  { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.sableLune, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  financeValue: { flex: 1, fontFamily: 'BricolageGrotesque_700Bold', fontSize: 18, color: Colors.parme },
+  financeLabel: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 16, color: Colors.parme, marginTop: 8 },
 });

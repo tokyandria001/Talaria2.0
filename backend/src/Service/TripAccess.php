@@ -4,6 +4,7 @@ namespace App\Service;
 
 use App\Entity\TravelGroup;
 use App\Entity\Trip;
+use App\Entity\TripMessage;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -17,6 +18,9 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final class TripAccess
 {
+    /** Types d'événements aussi affichés dans le chat du voyage */
+    private const CHAT_EVENTS = ['settlement', 'expense', 'vote', 'vote_result'];
+
     public function __construct(
         private EntityManagerInterface $em,
         private GroupJournal $journal,
@@ -63,6 +67,9 @@ final class TripAccess
     {
         if ($trip->getGroup()) {
             $this->journal->record($trip->getGroup(), $from, $type, $message, $trip, $throttle);
+        }
+        if (in_array($type, self::CHAT_EVENTS, true)) {
+            $this->em->persist((new TripMessage())->setTrip($trip)->setType(TripMessage::TYPE_SYSTEM)->setBody($message));
         }
     }
 

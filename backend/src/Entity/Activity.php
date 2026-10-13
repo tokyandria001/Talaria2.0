@@ -84,6 +84,21 @@ class Activity
     #[Assert\Length(max: 255)]
     private ?string $specialPriceNote = null;
 
+    /**
+     * Vote du groupe (phase 9) : null = activité du planning, « open » = proposée au vote,
+     * « validated » = validée (elle rejoint le planning), « rejected » = refusée.
+     */
+    #[ORM\Column(length: 12, nullable: true)]
+    private ?string $voteStatus = null;
+
+    /** Fin du vote (jour inclus) */
+    #[ORM\Column(type: 'date_immutable', nullable: true)]
+    private ?\DateTimeImmutable $voteDeadline = null;
+
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?User $proposedBy = null;
+
     /** true si générée par le remplissage automatique (et pas encore modifiée) */
     #[ORM\Column(options: ['default' => false])]
     private bool $isAuto = false;
@@ -130,6 +145,22 @@ class Activity
     public function setIsAuto(bool $v): static { $this->isAuto = $v; return $this; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+
+    public const VOTE_OPEN      = 'open';
+    public const VOTE_VALIDATED = 'validated';
+    public const VOTE_REJECTED  = 'rejected';
+
+    public function getVoteStatus(): ?string { return $this->voteStatus; }
+    public function setVoteStatus(?string $v): static { $this->voteStatus = $v; return $this; }
+
+    /** Visible dans le planning : activité normale ou validée par le groupe */
+    public function isInPlanning(): bool { return $this->voteStatus === null || $this->voteStatus === self::VOTE_VALIDATED; }
+
+    public function getVoteDeadline(): ?\DateTimeImmutable { return $this->voteDeadline; }
+    public function setVoteDeadline(?\DateTimeImmutable $v): static { $this->voteDeadline = $v; return $this; }
+
+    public function getProposedBy(): ?User { return $this->proposedBy; }
+    public function setProposedBy(?User $v): static { $this->proposedBy = $v; return $this; }
 
     /** Clé de tri chronologique : date puis créneau */
     public function getTime(): ?\DateTimeImmutable { return $this->time; }

@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import BottomSheet, { Chip, SheetLabel } from '../BottomSheet';
-import { comingSoon } from '../AuthUI';
 import client from '../../api/client';
 import { Colors } from '../../constants/Colors';
 import { categoryOf, priceLevel, distanceMeters, fmtDistance } from '../../constants/PlaceCategories';
@@ -27,6 +26,7 @@ function tripDays(start, end) {
 
 export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike }) {
   const [step,    setStep]    = useState('detail'); // detail | trip
+  const [mode,    setMode]    = useState('add');    // add : planning · vote : proposition au groupe
   const [trips,   setTrips]   = useState(null);
   const [trip,    setTrip]    = useState(null);
   const [day,     setDay]     = useState(null);
@@ -55,7 +55,8 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
     } finally { setUploading(false); }
   };
 
-  const openTripPicker = async () => {
+  const openTripPicker = async (nextMode = 'add') => {
+    setMode(nextMode);
     setStep('trip');
     if (trips) return;
     try {
@@ -67,14 +68,20 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
   const addToTrip = async () => {
     setSaving(true);
     try {
-      await client.post(`/api/trips/${trip.id}/activities`, {
+      const payload = {
         date: day, slot,
         title: place.name,
         placeId: place.id,
         category: categoryOf(place).value || null,
         description: place.description || null,
-      });
-      Alert.alert('Ajouté au voyage', `${place.name} est dans le planning de ${trip.destination}.`);
+      };
+      if (mode === 'vote') {
+        await client.post(`/api/trips/${trip.id}/votes`, payload);
+        Alert.alert('Proposé au vote', `Les participants de ${trip.destination} peuvent voter pour ${place.name}.`);
+      } else {
+        await client.post(`/api/trips/${trip.id}/activities`, payload);
+        Alert.alert('Ajouté au voyage', `${place.name} est dans le planning de ${trip.destination}.`);
+      }
       onClose();
     } catch (err) {
       Alert.alert('Erreur', err.response?.data?.message || "Impossible d'ajouter le lieu au voyage.");
@@ -91,7 +98,7 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
   const isCreator = !!user && place.createdBy?.id === user.id;
 
   return (
-    <BottomSheet visible={!!place} title={step === 'detail' ? place.name : 'Ajouter au voyage'} onClose={onClose}>
+    <BottomSheet visible={!!place} title={step === 'detail' ? place.name : mode === 'vote' ? 'Proposer au vote' : 'Ajouter au voyage'} onClose={onClose}>
       {step === 'detail' ? (
         <>
           {photo ? (
@@ -133,11 +140,11 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
           </View>
 
           <View style={s.actions}>
-            <TouchableOpacity style={s.outlineBtn} onPress={() => comingSoon('Le vote en groupe')}>
+            <TouchableOpacity style={s.outlineBtn} onPress={() => openTripPicker('vote')}>
               <Ionicons name="thumbs-up-outline" size={16} color={Colors.parme} />
               <Text style={s.outlineText}>Proposer au vote</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.primaryBtn} onPress={openTripPicker}>
+            <TouchableOpacity style={s.primaryBtn} onPress={() => openTripPicker('add')}>
               <Ionicons name="add" size={18} color={Colors.white} />
               <Text style={s.primaryText}>Ajouter au voyage</Text>
             </TouchableOpacity>
@@ -179,7 +186,7 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
               </View>
 
               <TouchableOpacity style={[s.primaryBtn, s.fullBtn, saving && { opacity: 0.6 }]} onPress={addToTrip} disabled={saving}>
-                <Text style={s.primaryText}>{saving ? 'Ajout...' : 'Ajouter au planning'}</Text>
+                <Text style={s.primaryText}>{saving ? 'Envoi...' : mode === 'vote' ? 'Proposer au groupe' : 'Ajouter au planning'}</Text>
               </TouchableOpacity>
             </>
           )}

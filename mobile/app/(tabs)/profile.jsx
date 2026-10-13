@@ -1,310 +1,242 @@
 import { useState, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, Alert, ActivityIndicator, Switch,
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import client from '../../api/client';
-import TalariaLogo from '../../components/TalariaLogo';
+import client, { assetUrl } from '../../api/client';
+import { Colors } from '../../constants/Colors';
+import { TAB_BAR_HEIGHT } from '../../constants/Layout';
+import { ACTIVITY_TAGS } from '../../constants/Preferences';
+import { tripPhoto, today, shortDate, daysUntil, initialsOf } from '../../constants/Trips';
 
+const COVER = require('../../assets/paris.jpg');
+
+/** Libellé d'un centre d'intérêt sans son émoji (« 🌿 Nature » → « Nature ») */
+const interestLabel = (value) => (ACTIVITY_TAGS.find(t => t.value === value)?.label ?? value).replace(/^\S+\s/, '');
+
+/** Profil (maquette 7) : photo, statistiques, centres d'intérêt, voyages récents, prochain départ */
 export default function ProfileScreen() {
-  const { user, logout }      = useAuth();
-  const { theme, isDark, toggleTheme } = useTheme();
-  const router   = useRouter();
-  const insets   = useSafeAreaInsets();
-  const tabBarH  = 64 + (insets.bottom || 16);
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { user, refreshUser } = useAuth();
 
-  const [pwdForm,     setPwdForm]     = useState({ currentPassword: '', newPassword: '', confirm: '' });
-  const [savingPwd,   setSavingPwd]   = useState(false);
-  const [pwdMsg,      setPwdMsg]      = useState(null);
-  const [deleteModal, setDeleteModal] = useState(false);
-  const [deletePwd,   setDeletePwd]   = useState('');
-  const [deleting,    setDeleting]    = useState(false);
-  const [pendingFriends, setPendingFriends] = useState(0);
+  const [counts,    setCounts]    = useState(null);
+  const [friends,   setFriends]   = useState(null);
+  const [trips,     setTrips]     = useState([]);
+  const [uploading, setUploading] = useState(false);
 
-  // Nombre de demandes d'ami reçues, rafraîchi à chaque retour sur l'écran
   useFocusEffect(useCallback(() => {
-    client.get('/api/friends/requests')
-      .then(({ data }) => setPendingFriends(data.received.length))
-      .catch(() => {});
+    client.get('/api/profile').then(({ data }) => setCounts(data.counts)).catch(() => {});
+    client.get('/api/friends').then(({ data }) => setFriends(data.length)).catch(() => {});
+    client.get('/api/trips').then(({ data }) => setTrips(data)).catch(() => {});
   }, []));
 
-  const initials = user
-    ? (((user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')) || (user.email?.[0] ?? '?')).toUpperCase()
-    : '?';
+  const past = trips.filter(t => t.endDate < today()).reverse();
+  const next = trips.find(t => t.endDate >= today());
+  const recent = past.length ? past : trips;
 
-  const handleChangePwd = async () => {
-    if (!pwdForm.currentPassword || !pwdForm.newPassword) {
-      setPwdMsg({ type: 'error', text: 'Remplis tous les champs.' }); return;
-    }
-    if (pwdForm.newPassword !== pwdForm.confirm) {
-      setPwdMsg({ type: 'error', text: 'Les mots de passe ne correspondent pas.' }); return;
-    }
-    setSavingPwd(true); setPwdMsg(null);
+  /** Appui sur la photo : choisir une nouvelle photo de profil */
+  const changePicture = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    if (res.canceled || !res.assets?.[0]) return;
+    const uri = res.assets[0].uri;
+    const ext = (uri.split('.').pop() || 'jpg').toLowerCase();
+    const form = new FormData();
+    form.append('picture', { uri, name: `avatar.${ext}`, type: `image/${ext === 'jpg' ? 'jpeg' : ext}` });
+    setUploading(true);
     try {
-      await client.put('/api/profile/password', {
-        currentPassword: pwdForm.currentPassword,
-        newPassword:     pwdForm.newPassword,
-      });
-      setPwdMsg({ type: 'success', text: 'Mot de passe modifié ✓' });
-      setPwdForm({ currentPassword: '', newPassword: '', confirm: '' });
+      await client.post('/api/profile/picture', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await refreshUser();
     } catch (err) {
-      setPwdMsg({ type: 'error', text: err.response?.data?.message ?? 'Erreur.' });
+      Alert.alert('Erreur', err.response?.data?.message || "Impossible d'envoyer la photo.");
     } finally {
-      setSavingPwd(false);
+      setUploading(false);
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace('/welcome');
-  };
+  const goBack = () => (router.canGoBack() ? router.back() : router.navigate('/(tabs)/home'));
 
-  const handleDeleteAccount = async () => {
-    if (!deletePwd) { Alert.alert('Mot de passe requis'); return; }
-    setDeleting(true);
-    try {
-      await client.delete('/api/profile', { data: { password: deletePwd } });
-      await logout();
-      router.replace('/');
-    } catch (err) {
-      Alert.alert('Erreur', err.response?.data?.message ?? 'Mot de passe incorrect.');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const t = theme;
+  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || 'Voyageur';
+  const avatar = assetUrl(user?.profilePicture);
+  const since = user?.createdAt?.slice(0, 4);
+  const interests = user?.activityTags ?? [];
+  const bottom = TAB_BAR_HEIGHT + Math.max(insets.bottom, 12);
+  const participants = next ? (next.participants?.length || next.travelers || 1) : 0;
 
   return (
-    <SafeAreaView style={[s.root, { backgroundColor: t.sableLune }]} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={[s.scroll, { paddingBottom: tabBarH + 16 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <TalariaLogo height={42} />
-        <Text style={[s.pageTitle, { color: t.parme }]}>Mon profil</Text>
-
-        {/* Avatar card — appui : modifier prénom, pseudo et préférences */}
-        <TouchableOpacity
-          style={[s.card, { backgroundColor: t.white, borderColor: t.border }]}
-          onPress={() => router.push({ pathname: '/complete-profile', params: { mode: 'edit' } })}
-          activeOpacity={0.85}
-        >
-          <View style={[s.avatarCircle, { backgroundColor: t.parme }]}>
-            <Text style={s.avatarText}>{initials}</Text>
+    <View style={s.root}>
+      <ScrollView contentContainerStyle={{ paddingBottom: bottom + 90 }} showsVerticalScrollIndicator={false}>
+        {/* Bandeau : photo atténuée, retour, paramètres */}
+        <View style={[s.hero, { paddingTop: insets.top + 8 }]}>
+          <Image source={COVER} style={s.cover} resizeMode="cover" />
+          <View style={s.veil} />
+          <View style={s.heroRow}>
+            <TouchableOpacity style={s.roundBtn} onPress={goBack} accessibilityLabel="Retour">
+              <Ionicons name="arrow-back" size={20} color={Colors.parme} />
+            </TouchableOpacity>
+            <TouchableOpacity style={s.roundBtn} onPress={() => router.push('/settings')} accessibilityLabel="Paramètres">
+              <Ionicons name="settings-outline" size={20} color={Colors.parme} />
+            </TouchableOpacity>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.userName, { color: t.text }]}>{user?.firstName ?? ''} {user?.lastName ?? ''}</Text>
-            <Text style={[s.userEmail, { color: t.textMuted }]}>{user?.email}</Text>
-            {user?.username
-              ? <Text style={[s.userPseudo, { color: t.parme }]}>@{user.username}</Text>
-              : <Text style={[s.userPseudo, { color: t.parme }]}>Ajouter un pseudo pour que tes amis te trouvent</Text>}
-          </View>
-          <Ionicons name="create-outline" size={20} color={t.parme} />
-        </TouchableOpacity>
 
-        {/* Amis (phase 7) */}
-        <TouchableOpacity
-          style={[s.card, { backgroundColor: t.white, borderColor: t.border }]}
-          onPress={() => router.push('/friends')}
-          activeOpacity={0.85}
-        >
-          <View style={s.settingRow}>
-            <View style={s.settingLeft}>
-              <View style={[s.settingIcon, { backgroundColor: isDark ? '#2e1a40' : '#f0e8f5' }]}>
-                <Ionicons name="people" size={18} color={t.parme} />
-              </View>
-              <View>
-                <Text style={[s.settingLabel, { color: t.text }]}>Mes amis</Text>
-                <Text style={[s.settingDesc, { color: t.textMuted }]}>
-                  {pendingFriends > 0
-                    ? `${pendingFriends} demande${pendingFriends > 1 ? 's' : ''} en attente`
-                    : 'Retrouvez vos compagnons de voyage'}
+          <TouchableOpacity onPress={changePicture} activeOpacity={0.85} style={s.avatarWrap} accessibilityLabel="Changer la photo de profil">
+            {avatar
+              ? <Image source={{ uri: avatar }} style={s.avatar} />
+              : <View style={[s.avatar, s.avatarEmpty]}><Text style={s.avatarText}>{initialsOf(user)}</Text></View>}
+            <View style={s.cameraBadge}>
+              {uploading ? <ActivityIndicator size="small" color={Colors.white} /> : <Ionicons name="camera" size={14} color={Colors.white} />}
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Identité */}
+        <View style={s.identity}>
+          <Text style={s.name}>{fullName}</Text>
+          {user?.username ? <Text style={s.handle}>@{user.username}</Text> : null}
+          {since ? <Text style={s.since}>Membre depuis {since}</Text> : null}
+        </View>
+
+        {/* Statistiques */}
+        <View style={s.stats}>
+          <Stat value={trips.length} label={trips.length > 1 ? 'voyages' : 'voyage'} />
+          <Stat value={counts?.articles} label={counts?.articles > 1 ? 'articles' : 'article'} />
+          <Stat value={friends} label={friends > 1 ? 'amis' : 'ami'} onPress={() => router.push('/friends')} />
+        </View>
+
+        {/* Centres d'intérêt */}
+        <Text style={s.section}>Centres d'intérêts</Text>
+        {interests.length ? (
+          <View style={s.tags}>
+            {interests.map(v => <Text key={v} style={s.tag}>{interestLabel(v)}</Text>)}
+          </View>
+        ) : (
+          <TouchableOpacity onPress={() => router.push({ pathname: '/complete-profile', params: { mode: 'edit' } })}>
+            <Text style={[s.pad, s.link]}>Ajouter vos centres d'intérêt</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Voyages récents */}
+        <Text style={s.section}>Voyages récents</Text>
+        {recent.length ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.row}>
+            {recent.map(t => (
+              <TouchableOpacity key={t.id} style={s.trip} onPress={() => router.push(`/trip/${t.id}`)} activeOpacity={0.85}>
+                <Image source={tripPhoto(t)} style={s.tripPhoto} resizeMode="cover" />
+                <Text style={s.tripName} numberOfLines={1}>{t.title || t.destination}</Text>
+                <Text style={s.tripDates}>{shortDate(t.startDate)} → {shortDate(t.endDate)}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        ) : (
+          <Text style={[s.pad, s.muted]}>Vos voyages apparaîtront ici.</Text>
+        )}
+
+        {/* Prochain départ */}
+        {next && (
+          <>
+            <Text style={s.section}>Prochain départ</Text>
+            <TouchableOpacity style={s.next} onPress={() => router.push(`/trip/${next.id}`)} activeOpacity={0.9}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.nextTitle} numberOfLines={1}>{next.title || next.destination}</Text>
+                <Text style={s.nextSub}>
+                  Du {shortDate(next.startDate)} au {shortDate(next.endDate)} · {participants} participant{participants > 1 ? 's' : ''}
                 </Text>
               </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={t.parme} />
-          </View>
-        </TouchableOpacity>
-
-        {/* Apparence */}
-        <View style={[s.card, { backgroundColor: t.white, borderColor: t.border }]}>
-          <Text style={[s.sectionTitle, { color: t.text }]}>Apparence</Text>
-          <View style={s.settingRow}>
-            <View style={s.settingLeft}>
-              <View style={[s.settingIcon, { backgroundColor: isDark ? '#2e1a40' : '#f0e8f5' }]}>
-                <Ionicons name={isDark ? 'moon' : 'sunny'} size={18} color={t.parme} />
-              </View>
-              <View>
-                <Text style={[s.settingLabel, { color: t.text }]}>Mode sombre</Text>
-                <Text style={[s.settingDesc, { color: t.textMuted }]}>{isDark ? 'Activé' : 'Désactivé'}</Text>
-              </View>
-            </View>
-            <Switch
-              value={isDark}
-              onValueChange={toggleTheme}
-              thumbColor={isDark ? t.parme : '#f4f4f4'}
-              trackColor={{ false: t.border, true: t.parmeLight }}
-            />
-          </View>
-        </View>
-
-        {/* Change password */}
-        <View style={[s.card, { backgroundColor: t.white, borderColor: t.border }]}>
-          <Text style={[s.sectionTitle, { color: t.text }]}>Changer le mot de passe</Text>
-
-          {['Mot de passe actuel', 'Nouveau mot de passe', 'Confirmer'].map((label, i) => {
-            const key = ['currentPassword', 'newPassword', 'confirm'][i];
-            return (
-              <View key={key}>
-                <Text style={[s.label, { color: t.text }]}>{label}</Text>
-                <TextInput
-                  style={[s.input, { backgroundColor: t.inputBg, color: t.text }]}
-                  placeholder="••••••••"
-                  placeholderTextColor={t.textMuted}
-                  secureTextEntry
-                  value={pwdForm[key]}
-                  onChangeText={v => setPwdForm(f => ({ ...f, [key]: v }))}
-                />
-              </View>
-            );
-          })}
-
-          {pwdMsg && (
-            <Text style={[s.msg, { color: pwdMsg.type === 'success' ? '#16a34a' : t.error }]}>
-              {pwdMsg.text}
-            </Text>
-          )}
-
-          <TouchableOpacity
-            style={[s.btn, { backgroundColor: t.parme }, savingPwd && { opacity: 0.6 }]}
-            onPress={handleChangePwd}
-            disabled={savingPwd}
-          >
-            {savingPwd
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={s.btnText}>Modifier le mot de passe</Text>
-            }
-          </TouchableOpacity>
-        </View>
-
-        {/* Logout */}
-        <TouchableOpacity
-          style={[s.logoutBtn, { borderColor: t.border, backgroundColor: t.white }]}
-          onPress={handleLogout}
-        >
-          <Text style={[s.logoutText, { color: t.textMuted }]}>Se déconnecter</Text>
-        </TouchableOpacity>
-
-        {/* Danger zone */}
-        <View style={[s.card, s.dangerCard]}>
-          <Text style={s.dangerTitle}>Zone dangereuse</Text>
-          <Text style={[s.dangerText, { color: t.textMuted }]}>
-            La suppression de votre compte est définitive. Tous vos articles, commentaires et likes seront effacés.
-          </Text>
-          <TouchableOpacity
-            style={s.dangerBtn}
-            onPress={() => { setDeleteModal(true); setDeletePwd(''); }}
-          >
-            <Text style={s.dangerBtnText}>Supprimer mon compte</Text>
-          </TouchableOpacity>
-        </View>
-
+              <Text style={s.nextPill}>{daysUntil(next.startDate) > 0 ? `J-${daysUntil(next.startDate)}` : 'En cours'}</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
-      {/* Delete account modal */}
-      {deleteModal && (
-        <View style={s.modalOverlay}>
-          <View style={[s.modalCard, { backgroundColor: t.white }]}>
-            <Text style={s.modalTitle}>Confirmer la suppression</Text>
-            <Text style={[s.modalText, { color: t.textMuted }]}>
-              Cette action est irréversible. Entrez votre mot de passe pour confirmer.
-            </Text>
-            <TextInput
-              style={[s.input, { backgroundColor: t.inputBg, color: t.text }]}
-              placeholder="Mot de passe"
-              placeholderTextColor={t.textMuted}
-              secureTextEntry
-              autoFocus
-              value={deletePwd}
-              onChangeText={setDeletePwd}
-            />
-            <View style={s.modalActions}>
-              <TouchableOpacity
-                style={[s.cancelBtn, { borderColor: t.border }]}
-                onPress={() => setDeleteModal(false)}
-                disabled={deleting}
-              >
-                <Text style={[s.cancelBtnText, { color: t.textMuted }]}>Annuler</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.dangerBtn, { flex: 1 }, deleting && { opacity: 0.6 }]}
-                onPress={handleDeleteAccount}
-                disabled={deleting || !deletePwd}
-              >
-                {deleting
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={s.dangerBtnText}>Confirmer</Text>
-                }
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
-    </SafeAreaView>
+      {/* Modifier le profil */}
+      <TouchableOpacity style={[s.edit, { bottom: bottom + 16 }]} activeOpacity={0.85}
+        onPress={() => router.push({ pathname: '/complete-profile', params: { mode: 'edit' } })}>
+        <Ionicons name="pencil" size={16} color={Colors.white} />
+        <Text style={s.editText}>Modifier</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
+function Stat({ value, label, onPress }) {
+  const content = (
+    <>
+      <Text style={s.statValue}>{value ?? '…'}</Text>
+      <Text style={s.statLabel}>{label}</Text>
+    </>
+  );
+  return onPress
+    ? <TouchableOpacity style={s.stat} onPress={onPress} activeOpacity={0.8}>{content}</TouchableOpacity>
+    : <View style={s.stat}>{content}</View>;
+}
+
 const s = StyleSheet.create({
-  root:      { flex: 1 },
-  scroll:    { padding: 16, gap: 14 },
-  pageTitle: { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 26, marginBottom: 4 },
+  root: { flex: 1, backgroundColor: Colors.sableLune },
+  pad:  { marginHorizontal: 18 },
+  muted: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted },
+  link:  { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.parme },
 
-  card: { borderRadius: 20, padding: 18, gap: 10, borderWidth: 1,
-          shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8,
-          shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  hero:    { paddingHorizontal: 18, paddingBottom: 6, alignItems: 'center', overflow: 'hidden' },
+  cover:   { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  veil:    { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(252,249,241,0.72)' },
+  heroRow: { alignSelf: 'stretch', flexDirection: 'row', justifyContent: 'space-between' },
+  roundBtn: {
+    width: 44, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.85)',
+    alignItems: 'center', justifyContent: 'center',
+  },
 
-  avatarCircle: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  avatarText:   { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 22, color: '#fff' },
-  userName:     { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16 },
-  userEmail:    { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13 },
-  userPseudo:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13 },
-  sectionTitle: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16 },
+  avatarWrap: { marginTop: 4 },
+  avatar:     { width: 112, height: 112, borderRadius: 56, borderWidth: 3, borderColor: Colors.parme },
+  avatarEmpty: { backgroundColor: Colors.parme, alignItems: 'center', justifyContent: 'center' },
+  avatarText:  { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 34, color: Colors.white },
+  cameraBadge: {
+    position: 'absolute', right: 4, bottom: 4, width: 30, height: 30, borderRadius: 15,
+    backgroundColor: Colors.parme, borderWidth: 2, borderColor: Colors.white, alignItems: 'center', justifyContent: 'center',
+  },
 
-  settingRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  settingLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  settingIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  settingLabel:{ fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14 },
-  settingDesc: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, marginTop: 1 },
+  identity: { alignItems: 'center', marginTop: 12 },
+  name:   { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 22, color: Colors.parme, textAlign: 'center' },
+  handle: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.text, marginTop: 2 },
+  since: {
+    fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.text, marginTop: 8,
+    backgroundColor: '#ece3e7', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 4, overflow: 'hidden',
+  },
 
-  label: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13 },
-  input: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
-           fontSize: 14, fontFamily: 'BricolageGrotesque_400Regular' },
-  msg:   { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13 },
+  stats: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 20, marginHorizontal: 18 },
+  stat:  { alignItems: 'center', minWidth: 80 },
+  statValue: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 24, color: Colors.parme },
+  statLabel: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 15, color: Colors.parme },
 
-  btn:     { borderRadius: 100, paddingVertical: 13, alignItems: 'center' },
-  btnText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: '#fff' },
+  section: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 18, color: Colors.parme, marginTop: 24, marginBottom: 10, marginHorizontal: 18 },
 
-  logoutBtn:  { borderWidth: 1.5, borderRadius: 100, paddingVertical: 13, alignItems: 'center' },
-  logoutText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14 },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginHorizontal: 18 },
+  tag: {
+    fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.parme,
+    borderWidth: 1.5, borderColor: Colors.parme, borderRadius: 100, paddingHorizontal: 12, paddingVertical: 5, overflow: 'hidden',
+  },
 
-  dangerCard:    { borderWidth: 1.5, borderColor: '#fca5a5', backgroundColor: '#fff5f5' },
-  dangerTitle:   { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16, color: '#dc2626' },
-  dangerText:    { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13 },
-  dangerBtn:     { backgroundColor: '#dc2626', borderRadius: 100, paddingVertical: 12, alignItems: 'center' },
-  dangerBtnText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, color: '#fff' },
+  row: { paddingHorizontal: 18, gap: 12 },
+  trip:      { width: 112 },
+  tripPhoto: { width: 112, height: 100, borderRadius: 14 },
+  tripName:  { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.text, marginTop: 6, textAlign: 'center' },
+  tripDates: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: Colors.textMuted, textAlign: 'center' },
 
-  modalOverlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
-                  justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalCard:    { borderRadius: 24, padding: 24, width: '100%', gap: 14 },
-  modalTitle:   { fontFamily: 'BricolageGrotesque_800ExtraBold', fontSize: 18, color: '#dc2626' },
-  modalText:    { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 14 },
-  modalActions: { flexDirection: 'row', gap: 10 },
-  cancelBtn:    { flex: 1, borderWidth: 1.5, borderRadius: 100, paddingVertical: 12, alignItems: 'center' },
-  cancelBtnText:{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14 },
+  next: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 18,
+    backgroundColor: Colors.parme, borderRadius: 18, paddingHorizontal: 18, paddingVertical: 16,
+  },
+  nextTitle: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 18, color: Colors.white },
+  nextSub:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+  nextPill: {
+    fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.parme,
+    backgroundColor: Colors.white, borderRadius: 100, paddingHorizontal: 12, paddingVertical: 6, overflow: 'hidden',
+  },
+
+  edit: {
+    position: 'absolute', right: 18, flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(79,32,63,0.88)', borderRadius: 100, paddingHorizontal: 18, paddingVertical: 12,
+  },
+  editText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.white },
 });
