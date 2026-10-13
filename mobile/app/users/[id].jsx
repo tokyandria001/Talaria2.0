@@ -3,7 +3,7 @@ import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, Alert, Act
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import client from '../../api/client';
+import client, { assetUrl } from '../../api/client';
 import UserAvatar from '../../components/UserAvatar';
 import { Colors } from '../../constants/Colors';
 import { ACTIVITY_TAGS } from '../../constants/Preferences';
@@ -64,10 +64,10 @@ export default function UserProfileScreen() {
   return (
     <View style={s.root}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} showsVerticalScrollIndicator={false}>
-        <View style={[s.hero, { paddingTop: insets.top + 8 }]}>
-          <Image source={COVER} style={s.cover} resizeMode="cover" />
-          <View style={s.veil} />
-          <View style={s.heroRow}>
+        <View style={[s.coverBox, { height: insets.top + 150 }]}>
+          <Image source={p.coverPhoto ? { uri: assetUrl(p.coverPhoto) } : COVER} style={s.coverImage} resizeMode="cover" />
+          {!p.coverPhoto && <View style={s.veil} />}
+          <View style={[s.heroRow, { marginTop: insets.top + 8 }]}>
             <TouchableOpacity style={s.roundBtn} onPress={() => router.back()} accessibilityLabel="Retour">
               <Ionicons name="arrow-back" size={20} color={Colors.parme} />
             </TouchableOpacity>
@@ -77,8 +77,8 @@ export default function UserProfileScreen() {
               </TouchableOpacity>
             )}
           </View>
-          <UserAvatar user={p} size={104} style={{ borderWidth: 3, borderColor: Colors.white }} />
         </View>
+        <UserAvatar user={p} size={104} style={s.avatar} />
 
         <View style={s.identity}>
           <Text style={s.name}>{p.displayName}</Text>
@@ -172,10 +172,11 @@ const s = StyleSheet.create({
   root:   { flex: 1, backgroundColor: Colors.sableLune },
   center: { alignItems: 'center', justifyContent: 'center' },
 
-  hero:    { paddingHorizontal: 18, paddingBottom: 6, alignItems: 'center', overflow: 'hidden' },
-  cover:   { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
-  veil:    { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(252,249,241,0.72)' },
-  heroRow: { alignSelf: 'stretch', flexDirection: 'row', justifyContent: 'space-between' },
+  coverBox:   { width: '100%', overflow: 'hidden', backgroundColor: Colors.parmeLight },
+  coverImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: undefined, height: undefined },
+  veil:    { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(252,249,241,0.55)' },
+  heroRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 18 },
+  avatar:  { alignSelf: 'center', marginTop: -52, borderWidth: 3, borderColor: Colors.white },
   roundBtn: { width: 44, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.85)', alignItems: 'center', justifyContent: 'center' },
 
   identity: { alignItems: 'center', marginTop: 12, paddingHorizontal: 18 },

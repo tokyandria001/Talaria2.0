@@ -37,29 +37,50 @@ export default function ProfileScreen() {
   const next = trips.find(t => t.endDate >= today());
   const recent = past.length ? past : trips;
 
-  /** Appui sur la photo : choisir une nouvelle photo de profil */
-  const changePicture = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+  /** Choisir une image et l'envoyer : photo de profil (carrée) ou couverture (bandeau 16:9) */
+  const pickAndUpload = async (kind) => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'], allowsEditing: true, aspect: kind === 'cover' ? [16, 9] : [1, 1], quality: 0.7,
+    });
     if (res.canceled || !res.assets?.[0]) return;
     const uri = res.assets[0].uri;
     const ext = (uri.split('.').pop() || 'jpg').toLowerCase();
+    const field = kind === 'cover' ? 'cover' : 'picture';
     const form = new FormData();
-    form.append('picture', { uri, name: `avatar.${ext}`, type: `image/${ext === 'jpg' ? 'jpeg' : ext}` });
-    setUploading(true);
+    form.append(field, { uri, name: `${field}.${ext}`, type: `image/${ext === 'jpg' ? 'jpeg' : ext}` });
+    setUploading(kind);
     try {
-      await client.post('/api/profile/picture', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await client.post(kind === 'cover' ? '/api/profile/cover' : '/api/profile/picture', form, { headers: { 'Content-Type': 'multipart/form-data' } });
       await refreshUser();
     } catch (err) {
-      Alert.alert('Erreur', err.response?.data?.message || "Impossible d'envoyer la photo.");
+      Alert.alert('Erreur', err.response?.data?.message || "Impossible d'envoyer l'image.");
     } finally {
       setUploading(false);
     }
   };
 
+  const coverMenu = () => Alert.alert('Photo de couverture', null, [
+    { text: 'Choisir une photo', onPress: () => pickAndUpload('cover') },
+    user?.coverPhoto && { text: 'Retirer la photo', style: 'destructive', onPress: async () => {
+      try { await client.delete('/api/profile/cover'); await refreshUser(); }
+      catch { Alert.alert('Erreur', 'Impossible de retirer la photo.'); }
+    } },
+    { text: 'Annuler', style: 'cancel' },
+  ].filter(Boolean));
+
+  // Statistiques : vers la liste si elle n'est pas vide, sinon vers l'ajout
+  const openTrips = () => (trips.length ? router.navigate('/(tabs)/trips') : router.push('/new-trip'));
+  const openArticles = () => router.navigate({
+    pathname: '/(tabs)/discover',
+    params: counts?.articles ? { view: 'community', filter: 'mine' } : { view: 'community', action: 'write' },
+  });
+  const openFriends = () => router.push(friends ? '/friends' : { pathname: '/friends', params: { tab: 'search' } });
+
   const goBack = () => (router.canGoBack() ? router.back() : router.navigate('/(tabs)/home'));
 
   const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || 'Voyageur';
   const avatar = assetUrl(user?.profilePicture);
+  const cover = user?.coverPhoto ? { uri: assetUrl(user.coverPhoto) } : COVER;
   const since = user?.createdAt?.slice(0, 4);
   const interests = user?.activityTags ?? [];
   const bottom = TAB_BAR_HEIGHT + Math.max(insets.bottom, 12);
@@ -67,12 +88,12 @@ export default function ProfileScreen() {
 
   return (
     <View style={s.root}>
-      <ScrollView contentContainerStyle={{ paddingBottom: bottom + 90 }} showsVerticalScrollIndicator={false}>
-        {/* Bandeau : photo atténuée, retour, paramètres */}
-        <View style={[s.hero, { paddingTop: insets.top + 8 }]}>
-          <Image source={COVER} style={s.cover} resizeMode="cover" />
-          <View style={s.veil} />
-          <View style={s.heroRow}>
+      <ScrollView contentContainerStyle={{ paddingBottom: bottom + 150 }} showsVerticalScrollIndicator={false}>
+        {/* Bandeau : photo de couverture (modifiable), retour, paramètres */}
+        <View style={[s.coverBox, { height: insets.top + 150 }]}>
+          <Image source={cover} style={s.coverImage} resizeMode="cover" />
+          {!user?.coverPhoto && <View style={s.veil} />}
+          <View style={[s.heroRow, { marginTop: insets.top + 8 }]}>
             <TouchableOpacity style={s.roundBtn} onPress={goBack} accessibilityLabel="Retour">
               <Ionicons name="arrow-back" size={20} color={Colors.parme} />
             </TouchableOpacity>
@@ -80,16 +101,20 @@ export default function ProfileScreen() {
               <Ionicons name="settings-outline" size={20} color={Colors.parme} />
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity onPress={changePicture} activeOpacity={0.85} style={s.avatarWrap} accessibilityLabel="Changer la photo de profil">
-            {avatar
-              ? <Image source={{ uri: avatar }} style={s.avatar} />
-              : <View style={[s.avatar, s.avatarEmpty]}><Text style={s.avatarText}>{initialsOf(user)}</Text></View>}
-            <View style={s.cameraBadge}>
-              {uploading ? <ActivityIndicator size="small" color={Colors.white} /> : <Ionicons name="camera" size={14} color={Colors.white} />}
-            </View>
+          <TouchableOpacity style={s.coverBtn} onPress={coverMenu} activeOpacity={0.85} accessibilityLabel="Changer la photo de couverture">
+            {uploading === 'cover' ? <ActivityIndicator size="small" color={Colors.parme} /> : <Ionicons name="image-outline" size={15} color={Colors.parme} />}
+            <Text style={s.coverBtnText}>Couverture</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity onPress={() => pickAndUpload('picture')} activeOpacity={0.85} style={s.avatarWrap} accessibilityLabel="Changer la photo de profil">
+          {avatar
+            ? <Image source={{ uri: avatar }} style={s.avatar} />
+            : <View style={[s.avatar, s.avatarEmpty]}><Text style={s.avatarText}>{initialsOf(user)}</Text></View>}
+          <View style={s.cameraBadge}>
+            {uploading === 'picture' ? <ActivityIndicator size="small" color={Colors.white} /> : <Ionicons name="camera" size={14} color={Colors.white} />}
+          </View>
+        </TouchableOpacity>
 
         {/* Identité */}
         <View style={s.identity}>
@@ -100,16 +125,20 @@ export default function ProfileScreen() {
 
         {/* Statistiques */}
         <View style={s.stats}>
-          <Stat value={trips.length} label={trips.length > 1 ? 'voyages' : 'voyage'} />
-          <Stat value={counts?.articles} label={counts?.articles > 1 ? 'articles' : 'article'} />
-          <Stat value={friends} label={friends > 1 ? 'amis' : 'ami'} onPress={() => router.push('/friends')} />
+          <Stat value={trips.length} label={trips.length > 1 ? 'voyages' : 'voyage'} onPress={openTrips} />
+          <Stat value={counts?.articles} label={counts?.articles > 1 ? 'articles' : 'article'} onPress={openArticles} />
+          <Stat value={friends} label={friends > 1 ? 'amis' : 'ami'} onPress={openFriends} />
         </View>
 
         {/* Centres d'intérêt */}
         <Text style={s.section}>Centres d'intérêts</Text>
         {interests.length ? (
           <View style={s.tags}>
-            {interests.map(v => <Text key={v} style={s.tag}>{interestLabel(v)}</Text>)}
+            {interests.map(v => (
+              <TouchableOpacity key={v} onPress={() => router.push('/edit-profile')} activeOpacity={0.7}>
+                <Text style={s.tag}>{interestLabel(v)}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         ) : (
           <TouchableOpacity onPress={() => router.push('/edit-profile')}>
@@ -151,7 +180,7 @@ export default function ProfileScreen() {
       </ScrollView>
 
       {/* Modifier le profil */}
-      <TouchableOpacity style={[s.edit, { bottom: bottom + 16 }]} activeOpacity={0.85}
+      <TouchableOpacity style={[s.edit, { bottom: bottom + 16 + 58 + 12 }]} activeOpacity={0.85}
         onPress={() => router.push('/edit-profile')}>
         <Ionicons name="pencil" size={16} color={Colors.white} />
         <Text style={s.editText}>Modifier</Text>
@@ -178,17 +207,22 @@ const s = StyleSheet.create({
   muted: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted },
   link:  { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.parme },
 
-  hero:    { paddingHorizontal: 18, paddingBottom: 6, alignItems: 'center', overflow: 'hidden' },
-  cover:   { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
-  veil:    { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(252,249,241,0.72)' },
-  heroRow: { alignSelf: 'stretch', flexDirection: 'row', justifyContent: 'space-between' },
+  coverBox:   { width: '100%', overflow: 'hidden', backgroundColor: Colors.parmeLight },
+  coverImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: undefined, height: undefined },
+  veil:    { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(252,249,241,0.55)' },
+  heroRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 18 },
   roundBtn: {
     width: 44, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.85)',
     alignItems: 'center', justifyContent: 'center',
   },
+  coverBtn: {
+    position: 'absolute', right: 14, bottom: 12, flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 100, paddingHorizontal: 12, paddingVertical: 6,
+  },
+  coverBtnText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.parme },
 
-  avatarWrap: { marginTop: 4 },
-  avatar:     { width: 112, height: 112, borderRadius: 56, borderWidth: 3, borderColor: Colors.parme },
+  avatarWrap: { alignSelf: 'center', marginTop: -56 },
+  avatar:     { width: 112, height: 112, borderRadius: 56, borderWidth: 3, borderColor: Colors.white },
   avatarEmpty: { backgroundColor: Colors.parme, alignItems: 'center', justifyContent: 'center' },
   avatarText:  { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 34, color: Colors.white },
   cameraBadge: {

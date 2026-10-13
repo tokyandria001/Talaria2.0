@@ -40,6 +40,7 @@ final class AccountDeleter
         $em->flush();
 
         $this->removeFile($user->getProfilePicture());
+        $this->removeFile($user->getCoverPhoto());
         $em->remove($user);
         $em->flush();
     }

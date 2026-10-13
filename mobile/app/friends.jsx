@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet,
   ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../api/client';
@@ -22,7 +22,8 @@ const errorMessage = (err, fallback) => err.response?.data?.message || fallback;
 /** Phase 7 — amis : liste, demandes reçues / envoyées, recherche d'utilisateurs */
 export default function FriendsScreen() {
   const router = useRouter();
-  const [tab,        setTab]        = useState('friends');
+  const params = useLocalSearchParams();
+  const [tab,        setTab]        = useState(['friends', 'requests', 'search'].includes(params.tab) ? params.tab : 'friends');
   const [friends,    setFriends]    = useState([]);
   const [requests,   setRequests]   = useState({ received: [], sent: [] });
   const [loading,    setLoading]    = useState(true);

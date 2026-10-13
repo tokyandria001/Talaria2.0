@@ -81,6 +81,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $profilePicture = null;
 
+    /** Photo de couverture du profil (bandeau derrière la photo) */
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $coverPhoto = null;
+
     /** Budget moyen par voyage (en euros) */
     #[ORM\Column(nullable: true)]
     #[Assert\PositiveOrZero(message: 'Le budget moyen ne peut pas être négatif.')]
@@ -223,6 +227,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
+
+    public function getCoverPhoto(): ?string { return $this->coverPhoto; }
+    public function setCoverPhoto(?string $v): static { $this->coverPhoto = $v; return $this; }
 
     public function getBio(): ?string { return $this->bio; }
     public function setBio(?string $v): static { $this->bio = $v; return $this; }

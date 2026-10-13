@@ -12,8 +12,12 @@ import WriteArticleModal from '../../components/WriteArticleModal';
 import { Colors } from '../../constants/Colors';
 import { useTheme } from '../../context/ThemeContext';
 
+/** « Mes articles » : filtre spécial (articles dont je suis l'auteur) */
+const MINE = '__mine__';
+
 const CATEGORIES = [
   { value: '',              label: 'Tous' },
+  { value: MINE,            label: '✍️ Mes articles' },
   { value: 'Itinéraires',  label: '🗺 Itinéraires' },
   { value: 'Aventures',    label: '🧗 Aventures' },
   { value: 'Éco-Tourisme', label: '🌿 Éco' },
@@ -21,7 +25,7 @@ const CATEGORIES = [
   { value: 'Conseils',     label: '💡 Conseils' },
 ];
 
-export default function CommunityPanel({ header, autoWrite, onAutoWriteHandled }) {
+export default function CommunityPanel({ header, autoWrite, onAutoWriteHandled, initialFilter, onFilterHandled }) {
   const { user }   = useAuth();
   const { theme }  = useTheme();
   const insets      = useSafeAreaInsets();
@@ -41,7 +45,8 @@ export default function CommunityPanel({ header, autoWrite, onAutoWriteHandled }
     if (!silent) setLoading(true);
     try {
       const params = {};
-      if (activeCategory) params.category = activeCategory;
+      if (activeCategory === MINE) params.mine = 'true';
+      else if (activeCategory) params.category = activeCategory;
       if (search)         params.search   = search;
       const { data } = await client.get('/api/articles', { params });
       setArticles(data.articles ?? []);
@@ -79,6 +84,11 @@ export default function CommunityPanel({ header, autoWrite, onAutoWriteHandled }
     setEditArticle(article);
     setShowWrite(true);
   };
+
+  // Ouverture sur « Mes articles » depuis le profil
+  useEffect(() => {
+    if (initialFilter === 'mine') { setActiveCategory(MINE); onFilterHandled?.(); }
+  }, [initialFilter, onFilterHandled]);
 
   // Ouverture de la rédaction depuis le bouton +
   useEffect(() => {

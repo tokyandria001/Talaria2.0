@@ -57,6 +57,7 @@ class UserController extends AbstractController
             'requestId'  => $friendship && !$friendship->isAccepted() ? $friendship->getId() : null,
             'isPrivate'  => !$visible,
             'memberSince' => $user->getCreatedAt()?->format('Y'),
+            'coverPhoto'  => $user->getCoverPhoto(),
         ];
         if (!$visible) return $this->json($profile);
 

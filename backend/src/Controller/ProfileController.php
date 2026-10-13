@@ -12,6 +12,7 @@ use App\Entity\Trip;
 use App\Entity\TripMessage;
 use App\Entity\User;
 use App\Service\Blocking;
+use App\Service\ImageUploader;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -126,6 +127,31 @@ class ProfileController extends AbstractController
         $em->flush();
 
         return $this->json(['profilePicture' => $publicPath]);
+    }
+
+    /** Photo de couverture du profil (multipart, champ « cover ») ; l'ancienne est supprimée */
+    #[Route('/cover', name: 'cover', methods: ['POST'])]
+    public function uploadCover(Request $request, ImageUploader $uploader): JsonResponse
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+        $user->setCoverPhoto($uploader->upload($request->files->get('cover'), 'covers', (string) $user->getId(), $user->getCoverPhoto()));
+        $this->em->flush();
+
+        return $this->json(['coverPhoto' => $user->getCoverPhoto()]);
+    }
+
+    /** Retirer la photo de couverture (retour à la photo par défaut) */
+    #[Route('/cover', name: 'cover_delete', methods: ['DELETE'])]
+    public function deleteCover(ImageUploader $uploader): JsonResponse
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+        $uploader->remove($user->getCoverPhoto());
+        $user->setCoverPhoto(null);
+        $this->em->flush();
+
+        return $this->json(['coverPhoto' => null]);
     }
 
     /**

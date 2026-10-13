@@ -32,6 +32,7 @@ final class UserPresenter
             'lastName'          => $u->getLastName(),
             'username'          => $u->getPseudo(),
             'profilePicture'    => $u->getProfilePicture(),
+            'coverPhoto'        => $u->getCoverPhoto(),
             'bio'               => $u->getBio(),
             'phone'             => $u->getPhone(),
             'averageBudget'     => $u->getAverageBudget(),

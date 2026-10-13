@@ -21,7 +21,7 @@ export default function DiscoverScreen() {
   }, [params.view]);
 
   // Une fois l'action traitée, on retire les paramètres pour ne pas la rejouer
-  const clearAction = useCallback(() => router.setParams({ action: undefined, view: undefined, shortcut: undefined }), [router]);
+  const clearAction = useCallback(() => router.setParams({ action: undefined, view: undefined, shortcut: undefined, filter: undefined }), [router]);
 
   const header = <DiscoverHeader view={view} onChangeView={setView} />;
 
@@ -39,6 +39,8 @@ export default function DiscoverScreen() {
       header={header}
       autoWrite={params.action === 'write'}
       onAutoWriteHandled={clearAction}
+      initialFilter={params.filter}
+      onFilterHandled={clearAction}
     />
   );
 }

@@ -6,6 +6,7 @@ use App\Tests\ApiTestCase;
 use App\Tests\SocialTestTrait;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /** Profil et paramètres (maquettes 27 à 37) */
 final class SettingsTest extends ApiTestCase
@@ -170,6 +171,28 @@ final class SettingsTest extends ApiTestCase
         self::assertStringContainsString('1 compte(s) supprimé(s)', $purge->getDisplay());
         [$code] = $this->json('POST', '/api/auth/login', ['username' => 'alice@talaria.test', 'password' => 'motdepasse123']);
         self::assertSame(401, $code);
+    }
+
+    public function testCoverPhotoCanBeChangedAndRemoved(): void
+    {
+        $token = $this->token('alice');
+        $file = sys_get_temp_dir() . '/talaria-cover.png';
+        file_put_contents($file, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='));
+        $this->client->request('POST', '/api/profile/cover', [], ['cover' => new UploadedFile($file, 'cover.png', 'image/png', null, true)], [
+            'HTTP_AUTHORIZATION' => "Bearer $token",
+        ]);
+        self::assertSame(200, $this->client->getResponse()->getStatusCode(), $this->client->getResponse()->getContent());
+        $cover = json_decode($this->client->getResponse()->getContent(), true)['coverPhoto'];
+        self::assertStringStartsWith('/uploads/covers/', $cover);
+
+        [, $me] = $this->json('GET', '/api/auth/me', null, $token);
+        self::assertSame($cover, $me['user']['coverPhoto']);
+        [, $public] = $this->json('GET', '/api/users/' . $this->user('alice')['id'], null, $this->token('bob'));
+        self::assertSame($cover, $public['coverPhoto'], 'Visible sur le profil public');
+
+        [, $removed] = $this->json('DELETE', '/api/profile/cover', null, $token);
+        self::assertNull($removed['coverPhoto']);
+        self::assertFileDoesNotExist(static::getContainer()->getParameter('kernel.project_dir') . '/public' . $cover);
     }
 
     public function testDataExport(): void
