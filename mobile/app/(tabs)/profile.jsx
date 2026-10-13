@@ -180,7 +180,7 @@ export default function ProfileScreen() {
       </ScrollView>
 
       {/* Modifier le profil */}
-      <TouchableOpacity style={[s.edit, { bottom: bottom + 16 + 58 + 12 }]} activeOpacity={0.85}
+      <TouchableOpacity style={[s.edit, { bottom: bottom + 16 }]} activeOpacity={0.85}
         onPress={() => router.push('/edit-profile')}>
         <Ionicons name="pencil" size={16} color={Colors.white} />
         <Text style={s.editText}>Modifier</Text>

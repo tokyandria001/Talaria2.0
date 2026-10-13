@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { TouchableOpacity, StyleSheet, Animated, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePathname } from 'expo-router';
 import ChatbotModal from './ChatbotModal';
 import { Colors } from '../constants/Colors';
 
@@ -9,6 +10,7 @@ const TAB_H  = 60;
 
 export default function ChatbotFAB() {
   const insets       = useSafeAreaInsets();
+  const pathname     = usePathname();
   const [open, setOpen] = useState(false);
 
   // Pulsation douce
@@ -32,7 +34,9 @@ export default function ChatbotFAB() {
     setOpen(true);
   };
 
-  const bottom = TAB_H + Math.max(insets.bottom, 8) + 16;
+  // Écrans avec un bouton flottant en bas à droite : l'assistant se place au-dessus
+  const RAISED = { '/profile': 44 + 12 };
+  const bottom = TAB_H + Math.max(insets.bottom, 8) + 16 + (RAISED[pathname] ?? 0);
 
   return (
     <>
