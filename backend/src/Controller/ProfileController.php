@@ -21,6 +21,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\String\Slugger\AsciiSlugger;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route('/api/profile', name: 'profile_')]
@@ -75,6 +76,38 @@ class ProfileController extends AbstractController
         }
         if (isset($data['settings']) && is_array($data['settings'])) {
             $user->setSettings($this->cleanSettings($data['settings'], $user->getSettings()));
+        }
+
+        // Onboarding (questions après l'inscription)
+        if (array_key_exists('birthYear', $data)) $user->setBirthYear($this->parseInt($data['birthYear'], 'année de naissance'));
+        if (array_key_exists('homeCity', $data)) {
+            $user->setHomeCity(mb_substr(trim((string) $data['homeCity']), 0, 120) ?: null);
+            $user->setHomeLatitude($this->parseFloat($data['homeLatitude'] ?? null, 'latitude'));
+            $user->setHomeLongitude($this->parseFloat($data['homeLongitude'] ?? null, 'longitude'));
+        }
+        if (isset($data['homeHubs']) && is_array($data['homeHubs'])) {
+            $user->setHomeHubs(array_slice(array_values(array_unique(array_filter(array_map(
+                fn ($h) => is_string($h) ? mb_substr(trim($h), 0, 80) : '', $data['homeHubs']
+            )))), 0, 6));
+        }
+        if (isset($data['travelerTypes']) && is_array($data['travelerTypes'])) {
+            $types = array_slice(array_values(array_intersect(User::TRAVELER_TYPES, array_map('strval', $data['travelerTypes']))), 0, 3);
+            $user->setTravelerTypes($types);
+            // Les styles choisis complètent les centres d'intérêt (remplissage du planning)
+            $tags = array_map(fn ($t) => User::TRAVELER_TYPE_TAGS[$t], $types);
+            $user->setActivityTags(array_values(array_unique([...$user->getActivityTags(), ...$tags])));
+        }
+        if (array_key_exists('weekendBudget', $data)) $user->setWeekendBudget($this->parseInt($data['weekendBudget'], 'budget'));
+        if (array_key_exists('companions', $data)) $user->setCompanions($data['companions'] ? (string) $data['companions'] : null);
+        if (isset($data['wishlist']) && is_array($data['wishlist'])) {
+            $user->setWishlist(array_slice(array_values(array_unique(array_filter(array_map(
+                fn ($w) => is_string($w) ? mb_substr(trim($w), 0, 60) : '', $data['wishlist']
+            )))), 0, 30));
+        }
+        if (!empty($data['completeOnboarding'])) {
+            $user->setOnboardedAt($user->getOnboardedAt() ?? new \DateTimeImmutable());
+            // Pas de pseudo choisi : on en propose un à partir du prénom (modifiable dans le profil)
+            if (!$user->getPseudo() && $user->getFirstName()) $user->setPseudo($this->suggestUsername($user->getFirstName()));
         }
 
         $errors = $validator->validate($user);
@@ -294,6 +327,20 @@ class ProfileController extends AbstractController
         $sessions->revokeAll($user);
 
         return $this->json(['message' => 'Mot de passe modifié avec succès.'] + $sessions->issue($user));
+    }
+
+    /** Pseudo libre construit sur le prénom : « alec », sinon « alec.42 »... */
+    private function suggestUsername(string $firstName): string
+    {
+        $base = strtolower((string) (new AsciiSlugger())->slug($firstName, '.'));
+        $base = substr(preg_replace('/[^a-z0-9.]/', '', $base) ?: 'voyageur', 0, 40);
+        if (strlen($base) < 3) $base .= '.voyage';
+        $repo = $this->em->getRepository(User::class);
+        $candidate = $base;
+        for ($i = 0; $repo->findOneBy(['username' => $candidate]) && $i < 20; $i++) {
+            $candidate = $base . '.' . random_int(10, $i < 10 ? 99 : 9999);
+        }
+        return $candidate;
     }
 
     private function serializeUser(User $user): array

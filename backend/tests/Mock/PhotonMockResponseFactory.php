@@ -23,6 +23,21 @@ final class PhotonMockResponseFactory
         if (str_contains($url, 'router.project-osrm.org')) {
             return new MockResponse(json_encode(['code' => 'Ok', 'routes' => [['distance' => 465_800, 'duration' => 17_880]]]));
         }
+        // Gares (dont une station de métro et une gare lointaine, écartées) et aéroports autour d'Angers
+        if (($query['osm_tag'] ?? '') === 'railway:station') {
+            return new MockResponse(json_encode(['type' => 'FeatureCollection', 'features' => [
+                $this->feature('Angers Saint-Laud', 'house', [-0.5566, 47.4645], ['city' => 'Angers']),
+                $this->feature('Gare du Nord (Métro)', 'house', [-0.55, 47.47], ['city' => 'Angers']),
+                $this->feature('Gare Montparnasse', 'house', [2.3191, 48.8400], ['city' => 'Paris']),
+            ]]));
+        }
+        if (($query['osm_tag'] ?? '') === 'aeroway:aerodrome') {
+            return new MockResponse(json_encode(['type' => 'FeatureCollection', 'features' => [
+                $this->feature('Aéroport Nantes-Atlantique', 'house', [-1.6083, 47.1519], ['city' => 'Saint-Aignan-Grandlieu']),
+                $this->feature("Aéroport d'Angers-Loire", 'house', [-0.3138, 47.5598], ['city' => 'Seiches-sur-le-Loir']),
+                $this->feature('Aéroport Lyon Saint-Exupéry', 'house', [5.0811, 45.7256], ['city' => 'Colombier']),
+            ]]));
+        }
         if (str_starts_with((string) ($query['q'] ?? ''), 'adresse')) {
             return new MockResponse(json_encode(['type' => 'FeatureCollection', 'features' => [
                 $this->feature('', 'house', [2.33, 48.87], ['housenumber' => '12', 'street' => 'Rue de la Paix', 'postcode' => '75002', 'city' => 'Paris', 'country' => 'France']),

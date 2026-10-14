@@ -40,6 +40,26 @@ class GeoController extends AbstractController
         }
     }
 
+    /** Gares et aéroports proches : city=Angers & lat= & lon= */
+    #[Route('/api/geo/hubs', name: 'api_geo_hubs', methods: ['GET'])]
+    public function hubs(Request $request, GeoSearch $geo, RateLimiterFactory $geoSearchLimiter): JsonResponse
+    {
+        /** @var User $me */
+        $me = $this->getUser();
+        if (!$geoSearchLimiter->create((string) $me->getId())->consume()->isAccepted()) {
+            return $this->json(['message' => 'Trop de recherches, réessayez dans un instant.'], 429);
+        }
+        $lat = $request->query->get('lat'); $lon = $request->query->get('lon');
+        if (!is_numeric($lat) || !is_numeric($lon) || abs((float) $lat) > 90 || abs((float) $lon) > 180) {
+            return $this->json(['message' => 'Position requise (lat, lon).'], 400);
+        }
+        try {
+            return $this->json(['hubs' => $geo->hubs((string) $request->query->get('city', ''), (float) $lat, (float) $lon)]);
+        } catch (GeoSearchUnavailable) {
+            return $this->json(['message' => 'La recherche de lieux est momentanément indisponible.', 'hubs' => []], 503);
+        }
+    }
+
     /** Distance et durée en voiture : from=lat,lng & to=lat,lng */
     #[Route('/api/geo/route', name: 'api_geo_route', methods: ['GET'])]
     public function route(Request $request, GeoSearch $geo, RateLimiterFactory $geoSearchLimiter): JsonResponse

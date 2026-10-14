@@ -13,6 +13,7 @@ import FriendPickerSheet from '../components/groups/FriendPickerSheet';
 import GroupPickerSheet from '../components/groups/GroupPickerSheet';
 import UserAvatar from '../components/UserAvatar';
 import PlaceAutocomplete from '../components/PlaceAutocomplete';
+import { useAuth } from '../context/AuthContext';
 import { Colors } from '../constants/Colors';
 
 const STEPS = ['Général', 'Transport', 'Logement', 'Inviter'];
@@ -59,6 +60,7 @@ export default function NewTripScreen() {
   const params = useLocalSearchParams();
   const presetGroupId = params.groupId ? Number(params.groupId) : null;
 
+  const { user } = useAuth();
   const [step, setStep]     = useState(0);
   const [saving, setSaving] = useState(false);
   const [group, setGroup]   = useState(null);        // groupe existant : lancé depuis un groupe ou choisi ici
@@ -73,8 +75,10 @@ export default function NewTripScreen() {
   const [f, setF] = useState({
     title: '',
     destination: typeof params.destination === 'string' ? params.destination : '', start: null, end: null, budgetPerPerson: '', wishes: [],
-    destinationPlace: null, departurePlace: null,   // suggestions choisies (ville exacte, pays, position)
-    transportMode: 'avion', departureCity: '', ticketPrice: '', eachBooksOwnTransport: false,
+    destinationPlace: null,                          // suggestions choisies (ville exacte, pays, position)
+    // Départ : la ville indiquée à l'onboarding
+    departurePlace: user?.homeCity && user.homeLatitude != null ? { name: user.homeCity, label: user.homeCity, latitude: user.homeLatitude, longitude: user.homeLongitude } : null,
+    transportMode: 'avion', departureCity: user?.homeCity ?? '', ticketPrice: '', eachBooksOwnTransport: false,
     distanceKm: '', distanceManual: false, fuelPrice: '1,72', fuelConsumption: '7', tollCost: '',
     accomType: 'airbnb', accomName: '', accomPrice: '', accomAddress: '', accomAddressPlace: null, accomLink: '',
     needsRental: false, rentalCost: '', splitCostsEqually: true,

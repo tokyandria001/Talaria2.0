@@ -23,6 +23,7 @@ export default function Index() {
     </View>
   );
   if (!user) return <Redirect href="/onboarding" />;
-  if (!isProfileComplete(user) && !skipped) return <Redirect href="/complete-profile" />;
+  // Onboarding pas encore fait (ni passé avec « Plus tard ») : les questions d'abord
+  if (!user.onboardedAt && !isProfileComplete(user) && !skipped) return <Redirect href="/profile-setup" />;
   return <Redirect href="/(tabs)/home" />;
 }

@@ -25,6 +25,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         'diets'          => ['vegetarien', 'vegan', 'sans-gluten', 'halal'],
     ];
 
+    /** Onboarding : styles de voyageur (3 au plus) et avec qui l'on part le plus souvent */
+    public const TRAVELER_TYPES = ['aventurier', 'foodie', 'culture', 'nature', 'fetard', 'romantique'];
+    public const COMPANIONS = ['amis', 'couple', 'famille', 'solo'];
+    /** Style de voyageur → centre d'intérêt utilisé pour remplir le planning */
+    public const TRAVELER_TYPE_TAGS = [
+        'aventurier' => 'aventure', 'foodie' => 'gastronomie', 'culture' => 'culture',
+        'nature' => 'nature', 'fetard' => 'nightlife', 'romantique' => 'bien-etre',
+    ];
+
     /** Délai avant la suppression effective d'un compte */
     public const DELETION_DELAY = '+30 days';
 
@@ -156,6 +165,48 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $deletionRequestedAt = null;
 
+    /* ── Onboarding (questions après l'inscription) ── */
+
+    /** Année de naissance : sert aux tarifs adaptés (-26 ans...), jamais affichée aux autres */
+    #[ORM\Column(nullable: true)]
+    #[Assert\Range(min: 1900, max: 2100, notInRangeMessage: 'Âge invalide.')]
+    private ?int $birthYear = null;
+
+    /** Ville de départ habituelle (trajets et prix calculés depuis chez soi) */
+    #[ORM\Column(length: 120, nullable: true)]
+    private ?string $homeCity = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?float $homeLatitude = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?float $homeLongitude = null;
+
+    /** Gares et aéroports préférés près de chez soi (libellés) */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $homeHubs = null;
+
+    /** Styles de voyageur (TRAVELER_TYPES, 3 au plus) */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $travelerTypes = null;
+
+    /** Budget pour un week-end, par personne, transport et logement compris (€) */
+    #[ORM\Column(nullable: true)]
+    #[Assert\Range(min: 0, max: 100000, notInRangeMessage: 'Budget invalide.')]
+    private ?int $weekendBudget = null;
+
+    /** Avec qui l'on part le plus souvent (COMPANIONS) */
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Assert\Choice(choices: self::COMPANIONS, message: 'Choix invalide.')]
+    private ?string $companions = null;
+
+    /** Destinations qui tentent (swipe de l'onboarding) */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $wishlist = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $onboardedAt = null;
+
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $createdAt = null;
 
@@ -221,6 +272,27 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getFavoriteTransport(): ?string { return $this->favoriteTransport; }
     public function setFavoriteTransport(?string $favoriteTransport): static { $this->favoriteTransport = $favoriteTransport; return $this; }
+
+    public function getBirthYear(): ?int { return $this->birthYear; }
+    public function setBirthYear(?int $year): static { $this->birthYear = $year; return $this; }
+    public function getHomeCity(): ?string { return $this->homeCity; }
+    public function setHomeCity(?string $city): static { $this->homeCity = $city; return $this; }
+    public function getHomeLatitude(): ?float { return $this->homeLatitude; }
+    public function setHomeLatitude(?float $lat): static { $this->homeLatitude = $lat; return $this; }
+    public function getHomeLongitude(): ?float { return $this->homeLongitude; }
+    public function setHomeLongitude(?float $lng): static { $this->homeLongitude = $lng; return $this; }
+    public function getHomeHubs(): array { return $this->homeHubs ?? []; }
+    public function setHomeHubs(array $hubs): static { $this->homeHubs = $hubs; return $this; }
+    public function getTravelerTypes(): array { return $this->travelerTypes ?? []; }
+    public function setTravelerTypes(array $types): static { $this->travelerTypes = $types; return $this; }
+    public function getWeekendBudget(): ?int { return $this->weekendBudget; }
+    public function setWeekendBudget(?int $budget): static { $this->weekendBudget = $budget; return $this; }
+    public function getCompanions(): ?string { return $this->companions; }
+    public function setCompanions(?string $companions): static { $this->companions = $companions; return $this; }
+    public function getWishlist(): array { return $this->wishlist ?? []; }
+    public function setWishlist(array $wishlist): static { $this->wishlist = $wishlist; return $this; }
+    public function getOnboardedAt(): ?\DateTimeImmutable { return $this->onboardedAt; }
+    public function setOnboardedAt(?\DateTimeImmutable $at): static { $this->onboardedAt = $at; return $this; }
 
     public function getInterests(): array { return $this->interests; }
     public function setInterests(array $interests): static { $this->interests = $interests; return $this; }

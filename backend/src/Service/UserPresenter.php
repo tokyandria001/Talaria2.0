@@ -50,6 +50,17 @@ final class UserPresenter
             'passwordChangedAt' => $u->getPasswordChangedAt()?->format(\DateTimeInterface::ATOM),
             'deletionScheduledFor' => $u->getDeletionScheduledFor()?->format('Y-m-d'),
             'createdAt'         => $u->getCreatedAt()?->format(\DateTimeInterface::ATOM),
+            // Onboarding (l'âge reste privé : seulement dans le profil de l'utilisateur lui-même)
+            'birthYear'         => $u->getBirthYear(),
+            'homeCity'          => $u->getHomeCity(),
+            'homeLatitude'      => $u->getHomeLatitude(),
+            'homeLongitude'     => $u->getHomeLongitude(),
+            'homeHubs'          => $u->getHomeHubs(),
+            'travelerTypes'     => $u->getTravelerTypes(),
+            'weekendBudget'     => $u->getWeekendBudget(),
+            'companions'        => $u->getCompanions(),
+            'wishlist'          => $u->getWishlist(),
+            'onboardedAt'       => $u->getOnboardedAt()?->format(\DateTimeInterface::ATOM),
         ];
     }
 }

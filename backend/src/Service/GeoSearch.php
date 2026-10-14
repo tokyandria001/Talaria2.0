@@ -95,6 +95,52 @@ final class GeoSearch
         });
     }
 
+    /**
+     * Gares et aéroports proches d'une ville (onboarding : « d'où pars-tu ? »).
+     * Gares : celles de la ville à moins de 25 km ; aéroports : les plus proches à moins de 120 km.
+     *
+     * @return list<array{name: string, kind: string, city: ?string, distanceKm: int}>
+     */
+    public function hubs(string $city, float $lat, float $lon): array
+    {
+        $city = trim(mb_substr($city, 0, 80));
+        $key = 'geo_hubs_' . md5(mb_strtolower($city) . sprintf('%.2f,%.2f', $lat, $lon));
+
+        return $this->cache->get($key, function (ItemInterface $item) use ($city, $lat, $lon) {
+            $item->expiresAfter(30 * 86400);
+            $bias = ['lat' => round($lat, 3), 'lon' => round($lon, 3), 'lang' => 'fr', 'limit' => 10];
+            $found = [
+                'train' => [$this->photon(['q' => $city ?: 'gare', 'osm_tag' => 'railway:station'] + $bias), 25, 3],
+                'avion' => [$this->photon(['q' => 'aéroport', 'osm_tag' => 'aeroway:aerodrome'] + $bias), 120, 3],
+            ];
+
+            $hubs = [];
+            foreach ($found as $kind => [$features, $maxKm, $max]) {
+                $list = [];
+                foreach ($features as $f) {
+                    $p = $f['properties'] ?? [];
+                    $c = $f['geometry']['coordinates'] ?? null;
+                    $name = trim((string) ($p['name'] ?? ''));
+                    // Les stations de métro ne sont pas des gares de départ
+                    if ($name === '' || !is_array($c) || stripos($name, 'métro') !== false) continue;
+                    $km = self::distanceKm($lat, $lon, (float) $c[1], (float) $c[0]);
+                    if ($km > $maxKm || isset($list[mb_strtolower($name)])) continue;
+                    $list[mb_strtolower($name)] = ['name' => $name, 'kind' => $kind, 'city' => $p['city'] ?? null, 'distanceKm' => (int) round($km)];
+                }
+                usort($list, fn ($a, $b) => $a['distanceKm'] <=> $b['distanceKm']);
+                array_push($hubs, ...array_slice($list, 0, $max));
+            }
+            return $hubs;
+        });
+    }
+
+    private static function distanceKm(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $r = M_PI / 180;
+        $a = sin(($lat2 - $lat1) * $r / 2) ** 2 + cos($lat1 * $r) * cos($lat2 * $r) * sin(($lon2 - $lon1) * $r / 2) ** 2;
+        return 6371 * 2 * atan2(sqrt($a), sqrt(1 - $a));
+    }
+
     /** Appel à Photon ; service indisponible → GeoSearchUnavailable (rien n'est mis en cache) */
     private function photon(array $params, array $layers = []): array
     {
