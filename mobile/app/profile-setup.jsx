@@ -56,6 +56,9 @@ const DESTINATIONS = [
   { key: 'new-york', name: 'New York, États-Unis', sub: 'Skyline · Brunchs · 6 jours',    image: require('../assets/destinations/new-york.jpg') },
   { key: 'alpes',    name: 'Chamonix, France',     sub: 'Ski · Raclette · 4 jours',       image: require('../assets/destinations/alpes.jpg') },
   { key: 'laponie',  name: 'Tromsø, Norvège',      sub: 'Aurores · Fjords · 5 jours',     image: require('../assets/destinations/laponie.jpg') },
+  { key: 'casablanca', name: 'Casablanca, Maroc',  sub: 'Médina · Tajines · 4 jours',     image: require('../assets/destinations/casablanca.jpg') },
+  { key: 'sydney',   name: 'Sydney, Australie',    sub: 'Opéra · Surf · 10 jours',        image: require('../assets/destinations/sydney.jpg') },
+  { key: 'maldives', name: 'Maldives',             sub: 'Lagons · Snorkeling · 7 jours',  image: require('../assets/destinations/maldives.jpg') },
 ];
 
 const POLAROIDS = [
