@@ -17,7 +17,8 @@ const fmtDay = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('fr-FR',
 export default function TripMapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id, day } = useLocalSearchParams();
+  const { id, day, mode } = useLocalSearchParams();
+  const voting = mode === 'vote';
   const [trip, setTrip] = useState(null);
   const [center, setCenter] = useState(null);
 
@@ -49,8 +50,11 @@ export default function TripMapScreen() {
         <Ionicons name="arrow-back" size={20} color={Colors.parme} />
       </TouchableOpacity>
       <View style={{ flex: 1 }}>
-        <Text style={s.title} numberOfLines={1}>Activités · {trip.title || trip.destination}</Text>
-        {day ? <Text style={s.sub} numberOfLines={1}>Pour le {fmtDay(day)} · touchez un lieu pour l'ajouter</Text> : null}
+        <Text style={s.title} numberOfLines={1}>{voting ? 'Proposer' : 'Activités'} · {trip.title || trip.destination}</Text>
+        <Text style={s.sub} numberOfLines={1}>
+          {voting ? 'Touchez un lieu pour le proposer au vote, ou appui long pour en créer un'
+            : day ? `Pour le ${fmtDay(day)} · touchez un lieu pour l'ajouter` : "Touchez un lieu pour l'ajouter"}
+        </Text>
       </View>
     </View>
   );
@@ -60,7 +64,7 @@ export default function TripMapScreen() {
       header={header}
       initialCamera={{ center, zoom: 12.5 }}
       initialShortcut="activites"
-      tripTarget={{ trip, day: typeof day === 'string' ? day : trip.startDate }}
+      tripTarget={{ trip, day: typeof day === 'string' ? day : trip.startDate, mode: voting ? 'vote' : 'add' }}
       onAddedToTrip={() => router.back()}
       bottomOffset={insets.bottom + 8}
     />

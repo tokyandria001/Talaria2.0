@@ -34,6 +34,26 @@ final class GeoTest extends ApiTestCase
         self::assertSame([], $short['results'], '2 caractères minimum');
     }
 
+    public function testAddressSearchAndDrivingRoute(): void
+    {
+        $token = $this->registerAndLogin();
+        [$code, $data] = $this->json('GET', '/api/geo/search?type=address&lat=45.76&lon=4.84&q=' . urlencode('adresse ' . uniqid()), null, $token);
+        self::assertSame(200, $code);
+        self::assertSame('12 Rue de la Paix', $data['results'][0]['name']);
+        self::assertSame('75002 Paris, France', $data['results'][0]['details']);
+        self::assertSame('Hôtel Ibis Styles Lyon Confluence', $data['results'][1]['name']);
+        self::assertSame('Rue Ravat, 69002 Lyon, France', $data['results'][1]['details']);
+
+        [$code, $route] = $this->json('GET', '/api/geo/route?from=48.8566,2.3522&to=45.7640,' . (4.8357 + mt_rand(1, 999) / 1e6), null, $token);
+        self::assertSame(200, $code);
+        self::assertSame(['distanceKm' => 466, 'durationMin' => 298], $route);
+
+        [$code] = $this->json('GET', '/api/geo/route?from=nord&to=45,4', null, $token);
+        self::assertSame(400, $code);
+        [$code] = $this->json('GET', '/api/geo/route?from=0,0&to=0,0', null, $token);
+        self::assertSame(503, $code);
+    }
+
     public function testUnavailableServiceIsReported(): void
     {
         $token = $this->registerAndLogin();

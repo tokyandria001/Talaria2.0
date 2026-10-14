@@ -320,14 +320,15 @@ function TripFormModal({ visible, trip, initialGroupId, onClose, onSaved }) {
           <View style={{ flex: 1 }}>
             <Text style={ms.headerTitle}>{isEdit ? 'Modifier le voyage' : 'Nouveau voyage'}</Text>
             <Text style={ms.headerSub}>
-              {['Infos de base', 'Transport', 'Réservations', 'Logements'][step]}
+              {{ 0: 'Infos de base', 1: 'Transport', 3: 'Logements' }[step]}
             </Text>
           </View>
         </View>
 
         {/* Steps */}
         <View style={ms.steps}>
-          {[0, 1, 2, 3].map(i => (
+          {/* L'étape « Réservations » (liens) n'est plus proposée : 0 → 1 → 3 */}
+          {[0, 1, 3].map(i => (
             <View key={i} style={[ms.stepDot, i < step ? ms.stepDone : i === step ? ms.stepActive : null]} />
           ))}
         </View>
@@ -352,7 +353,7 @@ function TripFormModal({ visible, trip, initialGroupId, onClose, onSaved }) {
               ) : null}
               <View style={ms.row}>
                 <View style={{ flex: 1 }}>
-                  <Text style={ms.label}>Ville de départ</Text>
+                  <Text style={ms.label}>Ville de départ commune</Text>
                   <TextInput style={ms.input} placeholder="Paris" placeholderTextColor={Colors.textMuted}
                     value={form.departureCity} onChangeText={set('departureCity')} />
                 </View>
@@ -629,13 +630,13 @@ function TripFormModal({ visible, trip, initialGroupId, onClose, onSaved }) {
         {/* Footer */}
         <View style={ms.footer}>
           <TouchableOpacity style={ms.backBtn}
-            onPress={() => step === 0 ? onClose() : setStep(p => p - 1)}>
+            onPress={() => step === 0 ? onClose() : setStep(p => (p === 3 ? 1 : p - 1))}>
             <Text style={ms.backBtnText}>{step === 0 ? 'Annuler' : '← Retour'}</Text>
           </TouchableOpacity>
 
           {step < 3 ? (
             <TouchableOpacity style={[ms.nextBtn, !canNext() && { opacity: 0.5 }]}
-              disabled={!canNext()} onPress={() => setStep(p => p + 1)}>
+              disabled={!canNext()} onPress={() => setStep(p => (p === 1 ? 3 : p + 1))}>
               <Text style={ms.nextBtnText}>Suivant →</Text>
             </TouchableOpacity>
           ) : (

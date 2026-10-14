@@ -56,6 +56,16 @@ class Expense
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?User $createdBy = null;
 
+    /** Dépense créée par la réservation d'un hébergement (retirée si la réservation est annulée) */
+    #[ORM\ManyToOne(targetEntity: Accommodation::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Accommodation $accommodation = null;
+
+    /** Dépense créée par le choix d'un trajet (remplacée si le participant en choisit un autre) */
+    #[ORM\ManyToOne(targetEntity: TransportOption::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?TransportOption $transportOption = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -68,6 +78,12 @@ class Expense
     public function onPrePersist(): void { $this->createdAt = new \DateTimeImmutable(); }
 
     public function getId(): int { return $this->id; }
+
+    public function getAccommodation(): ?Accommodation { return $this->accommodation; }
+    public function setAccommodation(?Accommodation $v): static { $this->accommodation = $v; return $this; }
+
+    public function getTransportOption(): ?TransportOption { return $this->transportOption; }
+    public function setTransportOption(?TransportOption $v): static { $this->transportOption = $v; return $this; }
 
     public function getTrip(): Trip { return $this->trip; }
     public function setTrip(Trip $v): static { $this->trip = $v; return $this; }

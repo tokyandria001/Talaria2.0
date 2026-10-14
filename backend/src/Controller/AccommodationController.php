@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Accommodation;
+use App\Entity\Expense;
 use App\Entity\Trip;
 use App\Entity\User;
 use App\Service\TripAccess;
@@ -52,7 +53,8 @@ class AccommodationController extends AbstractController
             return $this->json(['message' => 'Dates d\'arrivée et de départ requises.'], 400);
         }
 
-        $accommodation = (new Accommodation())->setTrip($trip)->setName('');
+        // Nouvel hébergement = proposition au groupe (validée ensuite dans l'onglet Logistique)
+        $accommodation = (new Accommodation())->setTrip($trip)->setName('')->setProposedBy($this->currentUser());
         $this->apply($accommodation, $data);
 
         $errors = $validator->validate($accommodation);
@@ -83,6 +85,16 @@ class AccommodationController extends AbstractController
             return $this->validationError($errors);
         }
 
+        // Hébergement réservé : sa dépense suit le prix et le nom
+        if ($accommodation->getStatus() === Accommodation::STATUS_BOOKED) {
+            if (!$accommodation->getPrice()) {
+                $this->em->refresh($accommodation);
+                return $this->json(['message' => 'Un hébergement réservé doit avoir un prix.'], 422);
+            }
+            foreach ($this->em->getRepository(Expense::class)->findBy(['accommodation' => $accommodation]) as $e) {
+                $e->setAmountCents($accommodation->getPrice() * 100)->setLabel(mb_substr('Logement · ' . $accommodation->getName(), 0, 120));
+            }
+        }
         $this->notifyPlanningChange($trip);
         $this->em->flush();
 
@@ -99,6 +111,8 @@ class AccommodationController extends AbstractController
         $accommodation = $this->em->getRepository(Accommodation::class)->findOneBy(['id' => $id, 'trip' => $trip]);
         if (!$accommodation) return $this->json(['message' => 'Logement introuvable.'], 404);
 
+        // La dépense créée par sa réservation part avec lui
+        foreach ($this->em->getRepository(Expense::class)->findBy(['accommodation' => $accommodation]) as $e) $this->em->remove($e);
         $this->em->remove($accommodation);
         $this->notifyPlanningChange($trip);
         $this->em->flush();
@@ -160,6 +174,8 @@ class AccommodationController extends AbstractController
             'specialPriceNote' => $a->getSpecialPriceNote(),
             'link'             => $a->getLink(),
             'address'          => $a->getAddress(),
+            'status'           => $a->getStatus(),
+            'proposedBy'       => $a->getProposedBy() ? UserPresenter::public($a->getProposedBy()) : null,
             'createdAt'        => $a->getCreatedAt()->format('Y-m-d'),
         ];
     }

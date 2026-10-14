@@ -19,9 +19,10 @@ final class BudgetCalculator
      * @param Expense[]    $expenses
      * @param Settlement[] $settlements
      * @param User[]       $participants participants actuels (affichés même sans dépense)
+     * @param array<int, int> $weights    nombre de personnes par participant (lui + rattachés) ; 1 par défaut
      * @return array{balances: array<int, array{user: User, paid: int, share: int, balance: int}>, transfers: list<array{from: User, to: User, amount: int}>}
      */
-    public function compute(array $expenses, array $settlements, array $participants): array
+    public function compute(array $expenses, array $settlements, array $participants, array $weights = []): array
     {
         $rows = [];
         $row = function (User $u) use (&$rows): void {
@@ -33,16 +34,22 @@ final class BudgetCalculator
             $row($e->getPaidBy());
             $rows[$e->getPaidBy()->getId()]['paid'] += $e->getAmountCents();
 
-            // Parts égales ; les centimes restants vont aux premiers participants (dans l'ordre des id)
+            // Parts par personne : un participant avec 2 enfants rattachés paie 3 parts.
+            // Les centimes restants vont aux premiers participants (dans l'ordre des id)
             $people = $e->getParticipants()->toArray();
             usort($people, fn (User $a, User $b) => $a->getId() <=> $b->getId());
-            $n = count($people);
-            if ($n === 0) continue;
-            $base = intdiv($e->getAmountCents(), $n);
-            $rest = $e->getAmountCents() - $base * $n;
+            $total = array_sum(array_map(fn (User $u) => max(1, $weights[$u->getId()] ?? 1), $people));
+            if ($total === 0) continue;
+            $given = 0;
+            $shares = [];
+            foreach ($people as $u) {
+                $shares[$u->getId()] = intdiv($e->getAmountCents() * max(1, $weights[$u->getId()] ?? 1), $total);
+                $given += $shares[$u->getId()];
+            }
+            $rest = $e->getAmountCents() - $given;
             foreach ($people as $i => $u) {
                 $row($u);
-                $rows[$u->getId()]['share'] += $base + ($i < $rest ? 1 : 0);
+                $rows[$u->getId()]['share'] += $shares[$u->getId()] + ($i < $rest ? 1 : 0);
             }
         }
 

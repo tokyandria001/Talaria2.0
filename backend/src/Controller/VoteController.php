@@ -223,7 +223,8 @@ class VoteController extends AbstractController
         $participants = count($this->access->participants($trip));
 
         $votes = [];
-        foreach ($this->em->getRepository(ActivityVote::class)->findBy(['activity' => $proposals ?: [0]]) as $v) {
+        // Dans l'ordre des votes (premier à avoir voté en premier)
+        foreach ($this->em->getRepository(ActivityVote::class)->findBy(['activity' => $proposals ?: [0]], ['id' => 'ASC']) as $v) {
             $votes[$v->getActivity()->getId()][] = $v;
         }
 
@@ -266,6 +267,11 @@ class VoteController extends AbstractController
                     // Note sur 5 : part des votants qui participent
                     'rating'      => $list ? round($yes / count($list) * 5, 1) : null,
                     'myVote'      => $mine ? ($mine->participates() ? 'yes' : 'no') : null,
+                    // Qui a voté quoi (visible de tous les participants)
+                    'voters'      => [
+                        'yes' => array_values(array_map(fn (ActivityVote $v) => UserPresenter::public($v->getUser()), array_filter($list, fn (ActivityVote $v) => $v->participates()))),
+                        'no'  => array_values(array_map(fn (ActivityVote $v) => UserPresenter::public($v->getUser()), array_filter($list, fn (ActivityVote $v) => !$v->participates()))),
+                    ],
                     'canDelete'   => $a->getVoteStatus() === Activity::VOTE_OPEN
                         && ($a->getProposedBy()?->getId() === $me->getId() || $this->access->canManage($trip, $me)),
                 ];

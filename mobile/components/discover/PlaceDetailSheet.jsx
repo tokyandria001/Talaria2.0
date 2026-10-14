@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
@@ -8,10 +9,8 @@ import client from '../../api/client';
 import { Colors } from '../../constants/Colors';
 import { categoryOf, priceLevel, distanceMeters, fmtDistance } from '../../constants/PlaceCategories';
 
-const SLOTS = [
-  { value: 'matin', label: 'Matin' }, { value: 'midi', label: 'Midi' },
-  { value: 'apres-midi', label: 'Après-midi' }, { value: 'soir', label: 'Soir' },
-];
+const toDate = (hm) => { const d = new Date(); const [h, m] = (hm || '10:00').split(':'); d.setHours(+h, +m, 0, 0); return d; };
+const toHm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 const photoUrl = (path) => (path?.startsWith('/') ? `${client.defaults.baseURL}${path}` : path);
 const fmtDay = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: 'short' });
@@ -24,13 +23,14 @@ function tripDays(start, end) {
   return days;
 }
 
-export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike, presetTrip, presetDay, onAdded }) {
+export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike, presetTrip, presetDay, presetMode, onAdded }) {
   const [step,    setStep]    = useState('detail'); // detail | trip
   const [mode,    setMode]    = useState('add');    // add : planning · vote : proposition au groupe
   const [trips,   setTrips]   = useState(null);
   const [trip,    setTrip]    = useState(null);
   const [day,     setDay]     = useState(null);
-  const [slot,    setSlot]    = useState('midi');
+  const [time,    setTime]    = useState('10:00');
+  const [showTime, setShowTime] = useState(false);
   const [saving,  setSaving]  = useState(false);
   const [photos,  setPhotos]  = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -57,6 +57,8 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
 
   const openTripPicker = async (nextMode = 'add') => {
     setMode(nextMode);
+    const cat = categoryOf(place).value;
+    setTime(cat === 'restaurant' || cat === 'marche' ? '12:30' : cat === 'bar' ? '20:00' : '10:00');
     setStep('trip');
     // Ouvert depuis un voyage : pas de choix de voyage, le jour est déjà connu
     if (presetTrip) {
@@ -75,7 +77,7 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
     setSaving(true);
     try {
       const payload = {
-        date: day, slot,
+        date: day, time,
         title: place.name,
         placeId: place.id,
         category: categoryOf(place).value || null,
@@ -145,14 +147,15 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
             {place.source === 'osm' && <Text style={s.osm}>Données © les contributeurs OpenStreetMap</Text>}
           </View>
 
+          {/* Ouvert depuis l'onglet Votes : « Proposer au vote » en bouton principal */}
           <View style={s.actions}>
-            <TouchableOpacity style={s.outlineBtn} onPress={() => openTripPicker('vote')}>
-              <Ionicons name="thumbs-up-outline" size={16} color={Colors.parme} />
-              <Text style={s.outlineText}>Proposer au vote</Text>
+            <TouchableOpacity style={presetMode === 'vote' ? s.primaryBtn : s.outlineBtn} onPress={() => openTripPicker('vote')}>
+              <Ionicons name="thumbs-up-outline" size={16} color={presetMode === 'vote' ? Colors.white : Colors.parme} />
+              <Text style={presetMode === 'vote' ? s.primaryText : s.outlineText}>Proposer au vote</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.primaryBtn} onPress={() => openTripPicker('add')}>
-              <Ionicons name="add" size={18} color={Colors.white} />
-              <Text style={s.primaryText}>Ajouter au voyage</Text>
+            <TouchableOpacity style={presetMode === 'vote' ? s.outlineBtn : s.primaryBtn} onPress={() => openTripPicker('add')}>
+              <Ionicons name="add" size={18} color={presetMode === 'vote' ? Colors.parme : Colors.white} />
+              <Text style={presetMode === 'vote' ? s.outlineText : s.primaryText}>Ajouter au voyage</Text>
             </TouchableOpacity>
           </View>
         </>
@@ -186,9 +189,19 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
                 ))}
               </ScrollView>
 
-              <SheetLabel>Créneau</SheetLabel>
+              <SheetLabel>Heure</SheetLabel>
               <View style={s.chips}>
-                {SLOTS.map(sl => <Chip key={sl.value} label={sl.label} active={slot === sl.value} onPress={() => setSlot(sl.value)} />)}
+                <TouchableOpacity style={s.timeBtn} onPress={() => setShowTime(true)} activeOpacity={0.8}>
+                  <Ionicons name="time-outline" size={16} color={Colors.parme} />
+                  <Text style={s.timeText}>{time}</Text>
+                </TouchableOpacity>
+                {showTime && (
+                  <DateTimePicker value={toDate(time)} mode="time" is24Hour display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(e, d) => { if (Platform.OS === 'android') setShowTime(false); if (e.type === 'set' && d) setTime(toHm(d)); }} />
+                )}
+                {showTime && Platform.OS === 'ios' && (
+                  <TouchableOpacity onPress={() => setShowTime(false)}><Text style={s.timeOk}>OK</Text></TouchableOpacity>
+                )}
               </View>
 
               <TouchableOpacity style={[s.primaryBtn, s.fullBtn, saving && { opacity: 0.6 }]} onPress={addToTrip} disabled={saving}>
@@ -247,6 +260,9 @@ const s = StyleSheet.create({
 
   backLink:     { flexDirection: 'row', alignItems: 'center', gap: 2 },
   backLinkText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.parme },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  timeBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.white, borderRadius: 100, borderWidth: 1.5, borderColor: Colors.parme, paddingHorizontal: 16, paddingVertical: 9 },
+  timeText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 15, color: Colors.parme },
+  timeOk: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.parme, marginLeft: 8 },
   empty: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.textMuted },
 });

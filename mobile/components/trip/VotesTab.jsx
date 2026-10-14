@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useFocusEffect } from 'expo-router';
+import UserAvatar from '../UserAvatar';
 import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import client, { assetUrl } from '../../api/client';
@@ -20,7 +22,7 @@ const capitalize = (t) => t.charAt(0).toUpperCase() + t.slice(1);
  * Onglet Votes (maquettes 24 et 24b) : activités proposées au groupe, « Je participe » / « Pas pour moi ».
  * Une activité validée rejoint le planning.
  */
-export default function VotesTab({ trip, refreshKey, onPropose, onChanged }) {
+export default function VotesTab({ trip, refreshKey, onPropose, onProposeManual, onChanged }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(null);
 
@@ -29,6 +31,8 @@ export default function VotesTab({ trip, refreshKey, onPropose, onChanged }) {
   }, [trip.id]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
+  // Retour de la carte après une proposition : la liste se met à jour
+  useFocusEffect(load);
 
   const vote = async (item, participates) => {
     setBusy(item.id);
@@ -75,10 +79,16 @@ export default function VotesTab({ trip, refreshKey, onPropose, onChanged }) {
 
       {votes.map(v => <VoteCard key={v.id} item={v} busy={busy === v.id} onVote={(p) => vote(v, p)} onRemove={() => remove(v)} />)}
 
+      {/* Proposer depuis la carte de la destination, ou une activité sans lieu */}
       <TouchableOpacity style={s.propose} onPress={onPropose} activeOpacity={0.85}>
-        <Ionicons name="add" size={18} color={Colors.parme} />
+        <Ionicons name="map-outline" size={18} color={Colors.parme} />
         <Text style={s.proposeText}>Proposer une activité</Text>
       </TouchableOpacity>
+      {onProposeManual && (
+        <TouchableOpacity style={s.manual} onPress={onProposeManual} hitSlop={8}>
+          <Text style={s.manualText}>ou proposer une activité sans lieu</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -139,6 +149,12 @@ function VoteCard({ item: v, busy, onVote, onRemove }) {
           </View>
         )}
 
+        {open && v.myVote && <Text style={s.change}>Touche l'autre choix pour changer d'avis.</Text>}
+
+        {/* Qui a voté quoi */}
+        <Voters icon="thumbs-up" label="Participent" people={v.voters?.yes ?? []} />
+        <Voters icon="close" label="Pas pour eux" people={v.voters?.no ?? []} />
+
         <View style={s.footer}>
           {v.proposedBy && <Text style={s.by}>Proposé par {v.proposedBy.firstName || v.proposedBy.displayName}</Text>}
           {v.canDelete && (
@@ -148,6 +164,20 @@ function VoteCard({ item: v, busy, onVote, onRemove }) {
           )}
         </View>
       </View>
+    </View>
+  );
+}
+
+function Voters({ icon, label, people }) {
+  if (!people.length) return null;
+  return (
+    <View style={s.voters}>
+      <Ionicons name={icon} size={13} color={Colors.parme} />
+      <Text style={s.votersLabel}>{label}</Text>
+      <View style={s.faces}>
+        {people.slice(0, 5).map((p, i) => <UserAvatar key={p.id} user={p} size={22} style={[s.face, i > 0 && { marginLeft: -6 }]} />)}
+      </View>
+      <Text style={s.votersNames} numberOfLines={1}>{people.map(p => p.firstName || p.displayName).join(', ')}</Text>
     </View>
   );
 }
@@ -210,4 +240,12 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderStyle: 'dashed', borderColor: Colors.parme, borderRadius: 100, paddingVertical: 12,
   },
   proposeText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.parme },
+  manual: { alignSelf: 'center', marginTop: 10 },
+  manualText: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.parme, textDecorationLine: 'underline' },
+  change: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: Colors.textMuted, marginTop: 6 },
+  voters: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  votersLabel: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 11, color: Colors.parme },
+  faces: { flexDirection: 'row' },
+  face: { borderWidth: 1.5, borderColor: Colors.white },
+  votersNames: { flex: 1, fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: Colors.text },
 });

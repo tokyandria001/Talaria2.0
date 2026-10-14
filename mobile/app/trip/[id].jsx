@@ -12,12 +12,13 @@ import FriendPickerSheet from '../../components/groups/FriendPickerSheet';
 import ActivitySheet from '../../components/trip/ActivitySheet';
 import BudgetTab from '../../components/trip/BudgetTab';
 import VotesTab from '../../components/trip/VotesTab';
+import LogisticsTab from '../../components/trip/LogisticsTab';
 import ChatTab from '../../components/trip/ChatTab';
 import UserAvatar from '../../components/UserAvatar';
 import { Colors } from '../../constants/Colors';
 import { categoryOf } from '../../constants/PlaceCategories';
 
-const TABS = ['Planning', 'Budget', 'Votes', 'Chat'];
+const TABS = ['Planning', 'Logistique', 'Budget', 'Votes', 'Chat'];
 const SLOT_TIMES = { matin: 'Matin', midi: 'Midi', 'apres-midi': 'Après-midi', soir: 'Soir' };
 const TRANSPORT = { avion: ['airplane', 'Vol'], train: ['train', 'Train'], bus: ['bus', 'Bus'], voiture: ['car', 'Route'] };
 
@@ -128,7 +129,7 @@ export default function TripScreen() {
       <View style={s.tabs}>
         {TABS.map(t => (
           <TouchableOpacity key={t} style={[s.tab, tab === t && s.tabOn]} onPress={() => setTab(t)}>
-            <Text style={[s.tabText, tab === t && s.tabTextOn]}>{t}</Text>
+            <Text style={[s.tabText, tab === t && s.tabTextOn]} numberOfLines={1} adjustsFontSizeToFit>{t}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -223,10 +224,12 @@ export default function TripScreen() {
           </>
         )}
 
+        {tab === 'Logistique' && <LogisticsTab trip={trip} onChanged={load} />}
         {tab === 'Budget' && <BudgetTab trip={trip} />}
         {tab === 'Votes' && (
           <VotesTab trip={trip} refreshKey={votesKey}
-            onPropose={() => setSheet({ date: currentDay, propose: true })}
+            onPropose={() => router.push({ pathname: '/trip-map/[id]', params: { id: String(trip.id), day: currentDay, mode: 'vote' } })}
+            onProposeManual={() => setSheet({ date: currentDay, propose: true })}
             onChanged={load} />
         )}
       </ScrollView>
@@ -275,12 +278,13 @@ function TimelineItem({ activity: a, onPress }) {
         <View style={s.tlLine} />
       </View>
       <TouchableOpacity style={s.tlCard} onPress={onPress} activeOpacity={0.85}>
+        {/* Carte compacte (vignette à gauche) : une journée de 4-5 activités tient à l'écran */}
         {photo
           ? <Image source={{ uri: assetUrl(photo) }} style={s.tlImage} />
-          : <View style={[s.tlImage, s.tlImageEmpty, { backgroundColor: cat.color }]}><Ionicons name={cat.icon} size={34} color="rgba(255,255,255,0.9)" /></View>}
+          : <View style={[s.tlImage, s.tlImageEmpty, { backgroundColor: cat.color }]}><Ionicons name={cat.icon} size={26} color="rgba(255,255,255,0.9)" /></View>}
         <View style={s.tlBody}>
-          <Text style={s.tlTitle} numberOfLines={2}>{a.title}</Text>
-          {subtitle ? <Text style={s.tlSub} numberOfLines={2}>{subtitle}</Text> : null}
+          <Text style={s.tlTitle} numberOfLines={1}>{a.title}</Text>
+          {subtitle ? <Text style={s.tlSub} numberOfLines={1}>{subtitle}</Text> : null}
           <View style={s.tlMeta}>
             {a.price != null && <Text style={s.tlTag}>{eur(a.price)} / pers</Text>}
             {a.hasSpecialPrice && <Text style={s.tlTag}>🏷 {a.specialPriceNote || 'Tarif spécial'}</Text>}
@@ -298,9 +302,9 @@ const s = StyleSheet.create({
   scroll: { paddingHorizontal: 18 },
 
   tabs:      { flexDirection: 'row', marginHorizontal: 18, marginVertical: 12, backgroundColor: '#efe6e9', borderRadius: 100, padding: 4 },
-  tab:       { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 100 },
+  tab:       { flex: 1, alignItems: 'center', paddingVertical: 8, paddingHorizontal: 2, borderRadius: 100 },
   tabOn:     { backgroundColor: Colors.parme },
-  tabText:   { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.text },
+  tabText:   { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.text },
   tabTextOn: { color: Colors.white },
 
   section:    { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 16, color: Colors.text, marginTop: 18, marginBottom: 10 },
@@ -327,13 +331,13 @@ const s = StyleSheet.create({
   tlLeft:  { width: 44, alignItems: 'center' },
   tlTime:  { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 11, color: Colors.textMuted },
   tlLine:  { flex: 1, width: 2, backgroundColor: '#e3d6dd', marginVertical: 4, borderRadius: 1 },
-  tlCard:  { flex: 1, backgroundColor: Colors.white, borderRadius: 16, overflow: 'hidden', marginBottom: 14 },
-  tlImage: { width: '100%', height: 120 },
+  tlCard:  { flex: 1, flexDirection: 'row', backgroundColor: Colors.white, borderRadius: 14, overflow: 'hidden', marginBottom: 10 },
+  tlImage: { width: 78, alignSelf: 'stretch', minHeight: 78 },
   tlImageEmpty: { alignItems: 'center', justifyContent: 'center' },
-  tlBody:  { padding: 12 },
-  tlTitle: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 15, color: Colors.text },
+  tlBody:  { flex: 1, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center' },
+  tlTitle: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.text },
   tlSub:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.textMuted, marginTop: 2 },
-  tlMeta:  { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  tlMeta:  { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
   tlTag:   { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 11, color: Colors.parme, backgroundColor: 'rgba(79,32,63,0.08)', borderRadius: 100, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
 
   empty:     { alignItems: 'center', backgroundColor: Colors.white, borderRadius: 16, padding: 18 },

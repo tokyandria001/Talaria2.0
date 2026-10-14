@@ -17,8 +17,17 @@ final class PhotonMockResponseFactory
     {
         self::$calls++;
         parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
-        if (($query['q'] ?? '') === 'panne') {
+        if (($query['q'] ?? '') === 'panne' || str_contains($url, '0.00000,0.00000')) {
             return new MockResponse('', ['http_code' => 503]);
+        }
+        if (str_contains($url, 'router.project-osrm.org')) {
+            return new MockResponse(json_encode(['code' => 'Ok', 'routes' => [['distance' => 465_800, 'duration' => 17_880]]]));
+        }
+        if (str_starts_with((string) ($query['q'] ?? ''), 'adresse')) {
+            return new MockResponse(json_encode(['type' => 'FeatureCollection', 'features' => [
+                $this->feature('', 'house', [2.33, 48.87], ['housenumber' => '12', 'street' => 'Rue de la Paix', 'postcode' => '75002', 'city' => 'Paris', 'country' => 'France']),
+                $this->feature('Hôtel Ibis Styles Lyon Confluence', 'house', [4.82, 45.74], ['street' => 'Rue Ravat', 'postcode' => '69002', 'city' => 'Lyon', 'country' => 'France']),
+            ]]));
         }
 
         return new MockResponse(json_encode(['type' => 'FeatureCollection', 'features' => [
@@ -31,6 +40,6 @@ final class PhotonMockResponseFactory
 
     private function feature(string $name, string $type, array $coords, array $props): array
     {
-        return ['type' => 'Feature', 'geometry' => ['type' => 'Point', 'coordinates' => $coords], 'properties' => ['name' => $name, 'type' => $type] + $props];
+        return ['type' => 'Feature', 'geometry' => ['type' => 'Point', 'coordinates' => $coords], 'properties' => array_filter(['name' => $name, 'type' => $type]) + $props];
     }
 }

@@ -73,7 +73,12 @@ final class VoteChatTest extends ApiTestCase
         [, $view] = $this->json('POST', $url, ['title' => 'Plongée', 'date' => '2027-07-21'], $this->token('bob'));
         $id = $view['votes'][0]['id'];
 
-        $this->json('POST', "$url/$id", ['participates' => false], $this->token('alice'));
+        // On peut changer d'avis tant que le vote est ouvert
+        [, $view] = $this->json('POST', "$url/$id", ['participates' => true], $this->token('alice'));
+        self::assertSame(['Bob', 'Alice'], array_column($view['votes'][0]['voters']['yes'], 'firstName'));
+        [, $view] = $this->json('POST', "$url/$id", ['participates' => false], $this->token('alice'));
+        self::assertSame(['Bob'], array_column($view['votes'][0]['voters']['yes'], 'firstName'));
+        self::assertSame(['Alice'], array_column($view['votes'][0]['voters']['no'], 'firstName'));
         [, $view] = $this->json('POST', "$url/$id", ['participates' => false], $this->token('chloe'));
         self::assertSame('rejected', $view['votes'][0]['status'], '2 « pas pour moi » sur 4 : plus de majorité possible');
         self::assertSame(2, $view['votes'][0]['no']);

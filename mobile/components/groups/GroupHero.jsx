@@ -29,7 +29,8 @@ export default function GroupHero({ photo, label, title, onBack, right }) {
 
 const s = StyleSheet.create({
   hero:  { paddingHorizontal: 18, paddingBottom: 18, overflow: 'hidden' },
-  cover: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  // Ancrée aux 4 bords, sans largeur en % (qui la décalait de la marge du bandeau)
+  cover: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: undefined, height: undefined },
   veil:  { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(252,249,241,0.55)' },
   row:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   back:  { width: 44, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.85)', alignItems: 'center', justifyContent: 'center' },

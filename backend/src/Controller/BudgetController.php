@@ -2,11 +2,13 @@
 
 namespace App\Controller;
 
+use App\Entity\Activity;
 use App\Entity\Expense;
 use App\Entity\Settlement;
 use App\Entity\Trip;
 use App\Entity\User;
 use App\Service\BudgetCalculator;
+use App\Service\TravelerSettings;
 use App\Service\TripAccess;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
@@ -32,6 +34,7 @@ class BudgetController extends AbstractController
         private EntityManagerInterface $em,
         private TripAccess $access,
         private BudgetCalculator $calculator,
+        private TravelerSettings $travelers,
     ) {}
 
     /* ── Tableau de bord du budget ────────────── */
@@ -210,13 +213,28 @@ class BudgetController extends AbstractController
         $expenses    = $this->em->getRepository(Expense::class)->findBy(['trip' => $trip], ['createdAt' => 'DESC', 'id' => 'DESC']);
         $settlements = $this->em->getRepository(Settlement::class)->findBy(['trip' => $trip], ['createdAt' => 'DESC', 'id' => 'DESC']);
         $participants = $this->access->participants($trip);
-        $result = $this->calculator->compute($expenses, $settlements, $participants);
+        // Chaque participant compte pour lui et ses personnes rattachées (enfants...)
+        $travelers = $this->travelers->all($trip);
+        $heads = array_map(fn ($t) => $t->getHeads(), $travelers);
+        $totalHeads = max(1, array_sum($heads));
+        $result = $this->calculator->compute($expenses, $settlements, $participants, $heads);
+
+        // Activités du planning : prix par personne × nombre de personnes (pas encore payées)
+        $activityCents = 0;
+        foreach ($this->em->getRepository(Activity::class)->findBy(['trip' => $trip]) as $a) {
+            if ($a->isInPlanning() && $a->getPrice()) $activityCents += $a->getPrice() * 100;
+        }
+
+        // Budget : somme des budgets personnels s'il y en a, sinon le budget commun du voyage
+        $personal = array_filter(array_map(fn ($t) => $t->getBudget(), $travelers), fn ($b) => $b !== null);
 
         $spent = array_sum(array_map(fn (Expense $e) => $e->getAmountCents(), $expenses));
         $byCategory = array_fill_keys(Expense::CATEGORIES, 0);
         foreach ($expenses as $e) $byCategory[$e->getCategory()] += $e->getAmountCents();
-        $budgetCents = $trip->getBudget() !== null ? $trip->getBudget() * 100 : null;
-        $count = max(1, count($participants));
+        $budgetCents = $personal ? array_sum($personal) * 100 : ($trip->getBudget() !== null ? $trip->getBudget() * 100 : null);
+        $mine = $travelers[$me->getId()] ?? null;
+        $myRow = $result['balances'][$me->getId()] ?? null;
+        $myPlanned = $activityCents * ($mine?->getHeads() ?? 1);
         $canManage = $this->access->canManage($trip, $me);
 
         $person = fn (User $u) => UserPresenter::public($u);
@@ -226,7 +244,18 @@ class BudgetController extends AbstractController
                 'budget'     => self::money($budgetCents),
                 'spent'      => self::money($spent),
                 'remaining'  => $budgetCents !== null ? self::money($budgetCents - $spent) : null,
-                'perPerson'  => self::money((int) round($spent / $count)),
+                'perPerson'  => self::money((int) round($spent / $totalHeads)),
+                'travelersCount' => $totalHeads,
+                'budgetSource' => $personal ? 'personal' : ($trip->getBudget() !== null ? 'trip' : null),
+                // Activités du planning, pour tout le groupe (prix par personne × voyageurs)
+                'plannedActivities' => self::money($activityCents * $totalHeads),
+                'me' => [
+                    'heads'     => $mine?->getHeads() ?? 1,
+                    'budget'    => $mine?->getBudget(),
+                    'share'     => self::money($myRow['share'] ?? 0),
+                    'planned'   => self::money($myPlanned),
+                    'remaining' => $mine?->getBudget() !== null ? self::money($mine->getBudget() * 100 - ($myRow['share'] ?? 0) - $myPlanned) : null,
+                ],
                 'byCategory' => array_map(fn (int $c) => self::money($c), $byCategory),
                 'participantsCount' => count($participants),
             ],
@@ -254,6 +283,8 @@ class BudgetController extends AbstractController
                 'share'   => self::money($r['share']),
                 'balance' => self::money($r['balance']),
                 'settled' => $r['balance'] >= 0,
+                'heads'   => $heads[$r['user']->getId()] ?? 1,
+                'budget'  => isset($travelers[$r['user']->getId()]) ? $travelers[$r['user']->getId()]->getBudget() : null,
             ], $result['balances'])),
             'transfers' => array_map(fn (array $t) => [
                 'from'   => $person($t['from']),

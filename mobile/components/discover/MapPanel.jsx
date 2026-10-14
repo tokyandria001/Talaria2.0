@@ -326,7 +326,7 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
         onClose={() => setShowFilters(false)}
       />
       <PlaceDetailSheet place={detail} userLoc={userLoc} onClose={() => setDetail(null)} onToggleLike={toggleLike}
-        presetTrip={tripTarget?.trip} presetDay={tripTarget?.day}
+        presetTrip={tripTarget?.trip} presetDay={tripTarget?.day} presetMode={tripTarget?.mode}
         onAdded={() => { setDetail(null); setPreview(null); onAddedToTrip?.(); }} />
       <AddPlaceSheet visible={addCoords !== undefined} coords={addCoords} onClose={() => setAddCoords(undefined)} onSaved={onPlaceAdded} />
     </View>

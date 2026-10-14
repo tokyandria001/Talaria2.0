@@ -47,7 +47,7 @@ export default function BudgetTab({ trip }) {
       {/* Chiffres clés */}
       <View style={s.hero}>
         <View style={s.heroRow}>
-          <Stat value={budget != null ? eur(budget) : '—'} label="Budget total" />
+          <Stat value={budget != null ? eur(budget) : '—'} label={summary.budgetSource === 'personal' ? 'Budgets cumulés' : 'Budget total'} />
           <Stat value={eur(summary.spent)} label="Dépensé" />
           <Stat value={eur(summary.perPerson)} label="Par personne" />
         </View>
@@ -61,6 +61,26 @@ export default function BudgetTab({ trip }) {
           </>
         )}
       </View>
+
+      {/* Ma part : budget personnel, dépenses qui me reviennent, activités prévues */}
+      {summary.me && (
+        <View style={s.meCard}>
+          <View style={s.rowBetween}>
+            <Text style={s.meTitle}>Ma part{summary.me.heads > 1 ? ` · ${summary.me.heads} personnes` : ''}</Text>
+            {summary.me.budget != null && (
+              <Text style={[s.meRemaining, summary.me.remaining < 0 && { color: '#dc2626' }]}>
+                {summary.me.remaining < 0 ? `Dépassement ${eur(-summary.me.remaining)}` : `${eur(summary.me.remaining)} restants`}
+              </Text>
+            )}
+          </View>
+          <View style={s.meRow}>
+            <MeStat value={summary.me.budget != null ? eur(summary.me.budget) : '—'} label="Mon budget" />
+            <MeStat value={eur(summary.me.share)} label="Mes dépenses" />
+            <MeStat value={eur(summary.me.planned)} label="Activités prévues" />
+          </View>
+          {summary.me.budget == null && <Text style={s.note}>Définis ton budget dans l'onglet Logistique.</Text>}
+        </View>
+      )}
 
       {/* Par catégorie */}
       {summary.spent > 0 && (
@@ -119,7 +139,7 @@ export default function BudgetTab({ trip }) {
             {balances.map(b => (
               <View key={b.user.id} style={s.balanceRow}>
                 <UserAvatar user={b.user} size={26} />
-                <Text style={s.balanceName}>{name(b.user)}</Text>
+                <Text style={s.balanceName}>{name(b.user)}{b.heads > 1 ? ` (+${b.heads - 1})` : ''}</Text>
                 <Text style={[s.balanceValue, { color: b.balance > 0.004 ? '#16a34a' : b.balance < -0.004 ? '#dc2626' : Colors.textMuted }]}>
                   {Math.abs(b.balance) < 0.005 ? 'À jour' : eur(b.balance, true)}
                 </Text>
@@ -127,7 +147,7 @@ export default function BudgetTab({ trip }) {
             ))}
           </View>
           <Text style={s.note}>
-            Part équitable : {eur(summary.perPerson)} par personne. Les soldes positifs ont avancé plus que leur part.
+            Part équitable : {eur(summary.perPerson)} par voyageur{summary.travelersCount > summary.participantsCount ? ', personnes rattachées comprises' : ''}. Les soldes positifs ont avancé plus que leur part.
           </Text>
 
           {/* Qui doit quoi ? */}
@@ -332,6 +352,12 @@ const Stat = ({ value, label }) => (
 );
 
 const s = StyleSheet.create({
+  meCard:    { backgroundColor: Colors.white, borderRadius: 16, borderWidth: 1, borderColor: '#efe6e9', padding: 14, marginTop: 12, gap: 10 },
+  meTitle:   { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.text },
+  meRemaining: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: '#16a34a' },
+  meRow:     { flexDirection: 'row', justifyContent: 'space-between' },
+  meValue:   { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 16, color: Colors.parme },
+  meLabel:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: Colors.textMuted, marginTop: 2 },
   hero:      { backgroundColor: Colors.parme, borderRadius: 18, padding: 16, gap: 10 },
   heroRow:   { flexDirection: 'row', justifyContent: 'space-between' },
   heroSmall: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.8)' },
@@ -383,3 +409,12 @@ const s = StyleSheet.create({
   smallBtn:     { backgroundColor: Colors.parme, borderRadius: 100, paddingHorizontal: 12, paddingVertical: 8 },
   smallBtnText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.white },
 });
+
+function MeStat({ value, label }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <Text style={s.meValue}>{value}</Text>
+      <Text style={s.meLabel}>{label}</Text>
+    </View>
+  );
+}

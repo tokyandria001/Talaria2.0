@@ -16,7 +16,8 @@ export const flagOf = (code) => (code && /^[A-Z]{2}$/i.test(code)
  * - `place` : suggestion choisie ({ name, label, details, country, countryCode, latitude, longitude }) ou null
  * - `onUnavailable(true)` : la recherche ne répond pas (la saisie libre est alors acceptée)
  */
-export default function PlaceAutocomplete({ value, place, onChangeText, onSelect, onUnavailable, placeholder, icon = 'location-outline', required }) {
+export default function PlaceAutocomplete({ value, place, onChangeText, onSelect, onUnavailable, placeholder, icon = 'location-outline', required, type = 'city', near }) {
+  const isAddress = type === 'address';
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -28,13 +29,17 @@ export default function PlaceAutocomplete({ value, place, onChangeText, onSelect
 
   useEffect(() => {
     const q = value.trim();
-    if (place || q.length < 2) { setResults([]); return undefined; }
+    if (place || q.length < (isAddress ? 3 : 2)) { setResults([]); return undefined; }
     let cancelled = false;
     const id = setTimeout(async () => {
       lastQuery.current = q;
       setLoading(true);
       try {
-        const { data } = await client.get('/api/geo/search', { params: { q } });
+        // Adresse : résultats proches de la destination du voyage d'abord
+        const params = isAddress
+          ? { q, type: 'address', ...(near ? { lat: near.latitude, lon: near.longitude } : {}) }
+          : { q };
+        const { data } = await client.get('/api/geo/search', { params });
         if (cancelled) return;
         setResults(data.results ?? []);
         setFailed(false); unavailableRef.current?.(false);
@@ -47,7 +52,7 @@ export default function PlaceAutocomplete({ value, place, onChangeText, onSelect
       }
     }, 300);
     return () => { cancelled = true; clearTimeout(id); };
-  }, [value, place]);
+  }, [value, place, isAddress, near?.latitude, near?.longitude]);
 
   const pick = (r) => {
     setResults([]);
@@ -76,7 +81,7 @@ export default function PlaceAutocomplete({ value, place, onChangeText, onSelect
 
       {place && (
         <Text style={s.chosen} numberOfLines={1}>
-          {flagOf(place.countryCode)} {place.details || place.country}
+          {isAddress ? '📍' : flagOf(place.countryCode)} {place.details || place.country}
         </Text>
       )}
 
@@ -84,7 +89,7 @@ export default function PlaceAutocomplete({ value, place, onChangeText, onSelect
         <View style={s.list}>
           {results.map((r, i) => (
             <TouchableOpacity key={`${r.label}-${i}`} style={[s.item, i > 0 && s.itemBorder]} onPress={() => pick(r)} activeOpacity={0.7}>
-              <Text style={s.flag}>{flagOf(r.countryCode) || '📍'}</Text>
+              <Text style={s.flag}>{isAddress ? '📍' : flagOf(r.countryCode) || '📍'}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={s.name} numberOfLines={1}>{r.name}</Text>
                 <Text style={s.details} numberOfLines={1}>{r.details}</Text>
@@ -94,10 +99,10 @@ export default function PlaceAutocomplete({ value, place, onChangeText, onSelect
         </View>
       )}
 
-      {noMatch && <Text style={s.hint}>Aucune ville trouvée : vérifie l'orthographe.</Text>}
-      {failed && <Text style={s.hint}>Suggestions indisponibles pour le moment : tu peux saisir la ville librement.</Text>}
+      {noMatch && <Text style={s.hint}>{isAddress ? 'Aucune adresse trouvée : ajoute le numéro, la rue et la ville.' : "Aucune ville trouvée : vérifie l'orthographe."}</Text>}
+      {failed && <Text style={s.hint}>Suggestions indisponibles pour le moment : tu peux saisir {isAddress ? "l'adresse" : 'la ville'} librement.</Text>}
       {required && !place && !failed && value.trim().length >= 2 && results.length > 0 && !focused && (
-        <Text style={[s.hint, { color: Colors.error }]}>Choisis la ville dans la liste des suggestions.</Text>
+        <Text style={[s.hint, { color: Colors.error }]}>Choisis {isAddress ? "l'adresse" : 'la ville'} dans la liste des suggestions.</Text>
       )}
     </View>
   );

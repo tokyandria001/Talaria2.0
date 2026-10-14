@@ -21,6 +21,11 @@ export const ACTIVITY_CATEGORIES = [
 const VENUE_TAGS = ['restaurant', 'bar'];
 const RADIUS_DEG = 0.25;
 
+/** Heure proposée par défaut : créneau existant, sinon selon la catégorie (déjeuner, soirée...) */
+const SLOT_TIMES = { matin: '10:00', midi: '12:30', 'apres-midi': '15:00', soir: '20:00' };
+export const defaultTimeFor = ({ slot, category } = {}) => SLOT_TIMES[slot]
+  ?? (category === 'restaurant' ? '12:30' : category === 'bar' ? '20:00' : '10:00');
+
 const fmtDay = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: '2-digit' });
 const toDate = (hm) => { const d = new Date(); const [h, m] = (hm || '12:00').split(':'); d.setHours(+h, +m, 0, 0); return d; };
 const toHm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -57,7 +62,7 @@ export default function ActivitySheet({ visible, trip, days, initial, priceDefau
     if (!visible || loadedFor.current === initial) return;
     loadedFor.current = initial;
     setForm({
-      title: initial?.title ?? '', date: initial?.date ?? days[0], time: initial?.time ?? '',
+      title: initial?.title ?? '', date: initial?.date ?? days[0], time: initial?.time ?? defaultTimeFor(initial ?? {}),
       price: initial?.price != null ? String(initial.price) : '', category: initial?.category ?? '',
       description: initial?.description ?? '', hasSpecialPrice: initial?.hasSpecialPrice ?? false,
       specialPriceNote: initial?.specialPriceNote ?? '',
@@ -103,7 +108,7 @@ export default function ActivitySheet({ visible, trip, days, initial, priceDefau
     setSaving(true);
     try {
       const payload = {
-        title: form.title.trim(), date: form.date, time: form.time || null,
+        title: form.title.trim(), date: form.date, time: form.time || defaultTimeFor(form),
         price: form.price !== '' ? parseInt(form.price, 10) : null,
         category: form.category || null, description: form.description.trim() || null,
         hasSpecialPrice: form.hasSpecialPrice, specialPriceNote: form.specialPriceNote.trim() || null,
@@ -172,10 +177,7 @@ export default function ActivitySheet({ visible, trip, days, initial, priceDefau
           <SheetLabel>Heure</SheetLabel>
           <TouchableOpacity style={s.field} onPress={() => setShowTime(true)}>
             <Ionicons name="time-outline" size={16} color={Colors.text} />
-            <Text style={[s.fieldText, !form.time && { color: '#b9aeb5' }]}>{form.time || 'Facultative'}</Text>
-            {!!form.time && (
-              <TouchableOpacity onPress={() => set('time')('')} hitSlop={8}><Ionicons name="close-circle" size={16} color="#b9aeb5" /></TouchableOpacity>
-            )}
+            <Text style={s.fieldText}>{form.time || defaultTimeFor(form)}</Text>
           </TouchableOpacity>
         </View>
         <View style={{ flex: 1 }}>

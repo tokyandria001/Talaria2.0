@@ -58,6 +58,18 @@ class Accommodation
     #[Assert\Length(max: 255)]
     private ?string $address = null;
 
+    /** Hébergement proposé au groupe, réservé (validé : il devient une dépense), ou non retenu */
+    public const STATUS_PROPOSED = 'proposed';
+    public const STATUS_BOOKED   = 'booked';
+    public const STATUS_REJECTED = 'rejected';
+
+    #[ORM\Column(length: 12, options: ['default' => 'proposed'])]
+    private string $status = self::STATUS_PROPOSED;
+
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?User $proposedBy = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -101,6 +113,12 @@ class Accommodation
 
     public function getAddress(): ?string { return $this->address; }
     public function setAddress(?string $v): static { $this->address = $v; return $this; }
+
+    public function getStatus(): string { return $this->status; }
+    public function setStatus(string $v): static { $this->status = $v; return $this; }
+
+    public function getProposedBy(): ?User { return $this->proposedBy; }
+    public function setProposedBy(?User $v): static { $this->proposedBy = $v; return $this; }
 
     public function getLink(): ?string { return $this->link; }
     public function setLink(?string $v): static { $this->link = $v; return $this; }

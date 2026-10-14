@@ -71,11 +71,12 @@ export default function NewTripScreen() {
   const [dateField, setDateField] = useState(null);  // 'start' | 'end' | null
 
   const [f, setF] = useState({
+    title: '',
     destination: typeof params.destination === 'string' ? params.destination : '', start: null, end: null, budgetPerPerson: '', wishes: [],
     destinationPlace: null, departurePlace: null,   // suggestions choisies (ville exacte, pays, position)
     transportMode: 'avion', departureCity: '', ticketPrice: '', eachBooksOwnTransport: false,
-    distanceKm: '', fuelPrice: '', fuelConsumption: '', tollCost: '',
-    accomType: 'airbnb', accomName: '', accomPrice: '', accomAddress: '', accomLink: '',
+    distanceKm: '', distanceManual: false, fuelPrice: '1,72', fuelConsumption: '7', tollCost: '',
+    accomType: 'airbnb', accomName: '', accomPrice: '', accomAddress: '', accomAddressPlace: null, accomLink: '',
     needsRental: false, rentalCost: '', splitCostsEqually: true,
   });
   const set = (k) => (v) => setF(p => ({ ...p, [k]: v }));
@@ -102,6 +103,30 @@ export default function NewTripScreen() {
     const ids = (group?.members ?? []).map(m => m.user.id);
     if (ids.length) setSelected(sel => sel.filter(id => !ids.includes(id)));
   }, [group]);
+
+  // Voiture : distance aller calculée dès que le départ et l'arrivée sont choisis (sauf saisie à la main)
+  const [route, setRoute] = useState(null); // { distanceKm, durationMin } | 'loading' | 'error'
+  const from = f.departurePlace, to = f.destinationPlace;
+  useEffect(() => {
+    if (f.transportMode !== 'voiture' || !from || !to) { setRoute(null); return undefined; }
+    let cancelled = false;
+    setRoute('loading');
+    client.get('/api/geo/route', { params: { from: `${from.latitude},${from.longitude}`, to: `${to.latitude},${to.longitude}` } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        setRoute(data);
+        setF(p => (p.distanceManual ? p : { ...p, distanceKm: String(data.distanceKm) }));
+      })
+      .catch(() => { if (!cancelled) setRoute('error'); });
+    return () => { cancelled = true; };
+  }, [f.transportMode, from, to]);
+
+  const num = (v) => { const n = parseFloat(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+  const carCost = useMemo(() => {
+    const fuel = num(f.distanceKm) * 2 * num(f.fuelConsumption) / 100 * num(f.fuelPrice);
+    const total = fuel + num(f.tollCost) + (f.needsRental ? num(f.rentalCost) : 0);
+    return { fuel: Math.round(fuel), total: Math.round(total) };
+  }, [f.distanceKm, f.fuelConsumption, f.fuelPrice, f.tollCost, f.needsRental, f.rentalCost]);
 
   const memberIds = useMemo(() => (group?.members ?? []).map(m => m.user.id), [group]);
   const invitable = friends.filter(u => !memberIds.includes(u.id));
@@ -138,6 +163,7 @@ export default function NewTripScreen() {
       const perPerson = int(f.budgetPerPerson);
       const car = f.transportMode === 'voiture';
       const { data: trip } = await client.post('/api/trips', {
+        title: f.title.trim() || null,
         destination: f.destination.trim(),
         ...(f.destinationPlace ? {
           destinationLatitude: f.destinationPlace.latitude,
@@ -152,8 +178,8 @@ export default function NewTripScreen() {
         transportMode: f.transportMode,
         transportPricePerPerson: car ? null : int(f.ticketPrice),
         distanceKm: car ? int(f.distanceKm) : null,
-        fuelPricePerLiter: car && f.fuelPrice ? parseFloat(f.fuelPrice.replace(',', '.')) : null,
-        fuelConsumption: car && f.fuelConsumption ? parseFloat(f.fuelConsumption.replace(',', '.')) : null,
+        fuelPricePerLiter: car && f.fuelPrice ? num(f.fuelPrice) : null,
+        fuelConsumption: car && f.fuelConsumption ? num(f.fuelConsumption) : null,
         tollCost: car ? int(f.tollCost) : null,
         needsRental: f.needsRental,
         rentalCost: f.needsRental ? int(f.rentalCost) : null,
@@ -230,6 +256,9 @@ export default function NewTripScreen() {
           {step === 0 && (
             <>
               {group && <Text style={s.groupNote}>👥 Voyage du groupe « {group.name} »</Text>}
+              <Label>Nom du voyage</Label>
+              <Input placeholder={f.destination ? `Week-end à ${f.destination}` : 'Week-end entre potes'} value={f.title} onChangeText={set('title')} maxLength={255} />
+
               <Label>Rechercher une destination</Label>
               <PlaceAutocomplete required placeholder="Entrez une ville, un pays..." icon="search"
                 value={f.destination} place={f.destinationPlace} onChangeText={typeDestination} onSelect={pickDestination} onUnavailable={setGeoDown} />
@@ -328,14 +357,53 @@ export default function NewTripScreen() {
               {f.transportMode === 'voiture' ? (
                 <>
                   <Label>Coût de la route</Label>
+                  {route === 'loading' && <Text style={s.hint}>Calcul de l'itinéraire...</Text>}
+                  {route && typeof route === 'object' && (
+                    <Text style={s.hint}>
+                      Itinéraire : {route.distanceKm} km, environ {Math.floor(route.durationMin / 60)} h {String(route.durationMin % 60).padStart(2, '0')} de route (aller)
+                    </Text>
+                  )}
+                  {route === 'error' && <Text style={s.hint}>Distance non calculée : saisis-la à la main.</Text>}
+                  {!from && <Text style={s.hint}>Choisis la ville de départ dans les suggestions pour calculer la distance.</Text>}
+
                   <View style={s.row}>
-                    <Input style={{ flex: 1 }} placeholder="Distance aller (km)" keyboardType="number-pad" value={f.distanceKm} onChangeText={set('distanceKm')} />
-                    <Input style={{ flex: 1 }} placeholder="Péages A/R (€)" keyboardType="number-pad" value={f.tollCost} onChangeText={set('tollCost')} />
+                    <View style={{ flex: 1 }}>
+                      <SubLabel>Distance aller (km)</SubLabel>
+                      <Input placeholder="466" keyboardType="number-pad" value={f.distanceKm}
+                        onChangeText={(v) => setF(p => ({ ...p, distanceKm: v, distanceManual: v !== '' }))} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <SubLabel>Péages A/R (€)</SubLabel>
+                      <Input placeholder="0" keyboardType="number-pad" value={f.tollCost} onChangeText={set('tollCost')} />
+                    </View>
                   </View>
                   <View style={s.row}>
-                    <Input style={{ flex: 1 }} placeholder="Carburant (€/L)" keyboardType="decimal-pad" value={f.fuelPrice} onChangeText={set('fuelPrice')} />
-                    <Input style={{ flex: 1 }} placeholder="Conso. (L/100 km)" keyboardType="decimal-pad" value={f.fuelConsumption} onChangeText={set('fuelConsumption')} />
+                    <View style={{ flex: 1 }}>
+                      <SubLabel>Carburant (€/L)</SubLabel>
+                      <Input placeholder="1,72" keyboardType="decimal-pad" value={f.fuelPrice} onChangeText={set('fuelPrice')} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <SubLabel>Conso. (L/100 km)</SubLabel>
+                      <Input placeholder="7" keyboardType="decimal-pad" value={f.fuelConsumption} onChangeText={set('fuelConsumption')} />
+                    </View>
                   </View>
+                  {from && to && (
+                    <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&origin=${from.latitude},${from.longitude}&destination=${to.latitude},${to.longitude}&travelmode=driving`)}>
+                      <Text style={s.link}>Voir l'itinéraire et les péages sur Google Maps</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {num(f.distanceKm) > 0 && (
+                    <View style={s.costCard}>
+                      <View style={s.costRow}><Text style={s.costLabel}>Carburant aller-retour</Text><Text style={s.costValue}>{carCost.fuel} €</Text></View>
+                      {num(f.tollCost) > 0 && <View style={s.costRow}><Text style={s.costLabel}>Péages</Text><Text style={s.costValue}>{Math.round(num(f.tollCost))} €</Text></View>}
+                      {f.needsRental && num(f.rentalCost) > 0 && <View style={s.costRow}><Text style={s.costLabel}>Location</Text><Text style={s.costValue}>{Math.round(num(f.rentalCost))} €</Text></View>}
+                      <View style={[s.costRow, s.costTotal]}>
+                        <Text style={s.costTotalText}>Total route</Text>
+                        <Text style={s.costTotalText}>{carCost.total} € · {Math.round(carCost.total / travelers)} €/pers</Text>
+                      </View>
+                    </View>
+                  )}
                 </>
               ) : (
                 <>
@@ -398,7 +466,17 @@ export default function NewTripScreen() {
               </View>
 
               <Label>Adresse</Label>
-              <Input icon="location-outline" placeholder="Calle Morelos 812, Barrio Antiguo" value={f.accomAddress} onChangeText={set('accomAddress')} />
+              {/* Adresse exacte ou nom de l'établissement, cherchés près de la destination */}
+              <PlaceAutocomplete type="address" placeholder="Adresse ou nom de l'hôtel" near={f.destinationPlace}
+                value={f.accomAddress} place={f.accomAddressPlace}
+                onChangeText={(v) => setF(p => ({ ...p, accomAddress: v, accomAddressPlace: null }))}
+                onSelect={(r) => setF(p => ({
+                  ...p,
+                  accomAddress: [r.name, r.details].filter(Boolean).join(', '),
+                  accomAddressPlace: r,
+                  // Établissement choisi (hôtel...) : son nom devient celui du logement s'il n'est pas saisi
+                  accomName: p.accomName.trim() || (/\d/.test(r.name) ? p.accomName : r.name),
+                }))} />
 
               <ToggleRow title="Location de voiture" subtitle="Ajouter une voiture au budget du groupe" value={f.needsRental} onChange={set('needsRental')} />
               {f.needsRental && <Input placeholder="Coût de la location (€)" keyboardType="number-pad" value={f.rentalCost} onChangeText={set('rentalCost')} />}
@@ -448,6 +526,7 @@ export default function NewTripScreen() {
 
               <View style={s.recap}>
                 <Text style={s.recapTitle}>Récapitulatif</Text>
+                {f.title.trim() ? <RecapRow label="Nom" value={f.title.trim()} /> : null}
                 <RecapRow label="Destination" value={f.destination} />
                 <RecapRow label="Dates" value={`${short(f.start)} → ${short(f.end)}`} />
                 <RecapRow label="Transport" value={`${transportLabel}${int(f.ticketPrice) && f.transportMode !== 'voiture' ? ` · ${int(f.ticketPrice)} €/pers` : ''}`} />
@@ -572,6 +651,13 @@ const s = StyleSheet.create({
   hint:  { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.textMuted, marginTop: 4 },
   error: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.error, marginTop: 4 },
   row:   { flexDirection: 'row', gap: 10 },
+  link:  { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.parme, textDecorationLine: 'underline', marginBottom: 10 },
+  costCard: { backgroundColor: Colors.white, borderRadius: 16, borderWidth: 1, borderColor: '#ece3e7', padding: 14, gap: 6, marginBottom: 10 },
+  costRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  costLabel: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 13, color: Colors.text },
+  costValue: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.text },
+  costTotal: { backgroundColor: Colors.parme, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginTop: 4 },
+  costTotalText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.white },
 
   inputWrap: { justifyContent: 'center', marginBottom: 10 },
   inputIcon: { position: 'absolute', left: 16, zIndex: 1 },
