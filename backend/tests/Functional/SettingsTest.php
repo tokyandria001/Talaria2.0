@@ -4,6 +4,7 @@ namespace App\Tests\Functional;
 
 use App\Tests\ApiTestCase;
 use App\Tests\SocialTestTrait;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -162,7 +163,7 @@ final class SettingsTest extends ApiTestCase
         $purge->execute([]);
         self::assertStringContainsString('0 compte(s) supprimé(s)', $purge->getDisplay());
 
-        $em = static::getContainer()->get('doctrine')->getManager();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
         $em->getConnection()->executeStatement(
             'UPDATE user SET deletion_requested_at = :d WHERE email = :e',
             ['d' => (new \DateTimeImmutable('-31 days'))->format('Y-m-d H:i:s'), 'e' => 'alice@talaria.test'],

@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
 import BottomSheet, { Chip, SheetLabel } from '../BottomSheet';
-import { comingSoon } from '../AuthUI';
 import client from '../../api/client';
 import { Colors } from '../../constants/Colors';
 

@@ -27,6 +27,9 @@ export default function PlaceAutocomplete({ value, place, onChangeText, onSelect
   const unavailableRef = useRef(onUnavailable);
   unavailableRef.current = onUnavailable;
 
+  // Position de référence en nombres : un nouvel objet `near` à chaque affichage ne relance pas la recherche
+  const nearLat = near?.latitude, nearLon = near?.longitude;
+
   useEffect(() => {
     const q = value.trim();
     if (place || q.length < (isAddress ? 3 : 2)) { setResults([]); return undefined; }
@@ -37,7 +40,7 @@ export default function PlaceAutocomplete({ value, place, onChangeText, onSelect
       try {
         // Adresse : résultats proches de la destination du voyage d'abord
         const params = isAddress
-          ? { q, type: 'address', ...(near ? { lat: near.latitude, lon: near.longitude } : {}) }
+          ? { q, type: 'address', ...(nearLat != null ? { lat: nearLat, lon: nearLon } : {}) }
           : { q };
         const { data } = await client.get('/api/geo/search', { params });
         if (cancelled) return;
@@ -52,7 +55,7 @@ export default function PlaceAutocomplete({ value, place, onChangeText, onSelect
       }
     }, 300);
     return () => { cancelled = true; clearTimeout(id); };
-  }, [value, place, isAddress, near?.latitude, near?.longitude]);
+  }, [value, place, isAddress, nearLat, nearLon]);
 
   const pick = (r) => {
     setResults([]);

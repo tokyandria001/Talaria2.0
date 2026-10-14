@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   View, Text, Image, StyleSheet, Dimensions,
   FlatList, TouchableOpacity, StatusBar, Animated,

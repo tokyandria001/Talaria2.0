@@ -22,7 +22,7 @@ export default function ChatbotFAB() {
         Animated.timing(pulse, { toValue: 1.00, duration: 900, useNativeDriver: true }),
       ])
     ).start();
-  }, []);
+  }, [pulse]);
 
   // Rebond à l'ouverture
   const bounce = useRef(new Animated.Value(1)).current;

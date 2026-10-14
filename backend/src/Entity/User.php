@@ -101,7 +101,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     /** Tags d'activités préférées: ["culture","nature","nightlife","sport","gastronomie","aventure"] */
     #[ORM\Column(type: 'json', nullable: true)]
-    private array $activityTags = [];
+    private ?array $activityTags = [];
 
     /** Mode de voyage: "budget" | "confort" | "luxe" */
     #[ORM\Column(length: 20, nullable: true)]
@@ -117,7 +117,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     /** Centres d'intérêt libres */
     #[ORM\Column(type: 'json', nullable: true)]
-    private array $interests = [];
+    private ?array $interests = [];
 
     /* ── Profil et paramètres (maquettes 27 à 37) ── */
 
@@ -261,7 +261,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getAverageBudget(): ?int { return $this->averageBudget; }
     public function setAverageBudget(?int $averageBudget): static { $this->averageBudget = $averageBudget; return $this; }
 
-    public function getActivityTags(): array { return $this->activityTags; }
+    public function getActivityTags(): array { return $this->activityTags ?? []; }
     public function setActivityTags(array $activityTags): static { $this->activityTags = $activityTags; return $this; }
 
     public function getTravelStyle(): ?string { return $this->travelStyle; }
@@ -294,7 +294,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getOnboardedAt(): ?\DateTimeImmutable { return $this->onboardedAt; }
     public function setOnboardedAt(?\DateTimeImmutable $at): static { $this->onboardedAt = $at; return $this; }
 
-    public function getInterests(): array { return $this->interests; }
+    public function getInterests(): array { return $this->interests ?? []; }
     public function setInterests(array $interests): static { $this->interests = $interests; return $this; }
 
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }

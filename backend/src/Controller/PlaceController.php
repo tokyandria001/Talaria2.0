@@ -128,7 +128,7 @@ class PlaceController extends AbstractController
               ->setAddress(!empty($data['address']) ? trim((string) $data['address']) : null)
               ->setLatitude((float) $data['latitude'])
               ->setLongitude((float) $data['longitude'])
-              ->setCreatedBy($this->getUser());
+              ->setCreatedBy($this->getUser() instanceof User ? $this->getUser() : null);
 
         $errors = $validator->validate($place);
         if (count($errors) > 0) return $this->validationError($errors);

@@ -90,7 +90,7 @@ export default function PlaceDetailSheet({ place, userLoc, onClose, onToggleLike
         await client.post(`/api/trips/${trip.id}/activities`, payload);
         Alert.alert('Ajouté au voyage', `${place.name} est dans le planning de ${trip.destination}.`);
       }
-      onAdded ? onAdded() : onClose();
+      if (onAdded) onAdded(); else onClose();
     } catch (err) {
       Alert.alert('Erreur', err.response?.data?.message || "Impossible d'ajouter le lieu au voyage.");
     } finally {

@@ -91,9 +91,8 @@ function findReply(text) {
 
 /* ── Indicateur de frappe ─────────────────────── */
 function TypingDots() {
-  const dots = [useRef(new Animated.Value(0)).current,
-                useRef(new Animated.Value(0)).current,
-                useRef(new Animated.Value(0)).current];
+  // Un seul tableau gardé entre les affichages : l'animation n'est lancée qu'une fois
+  const dots = useRef([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]).current;
 
   useEffect(() => {
     const anims = dots.map((d, i) =>
@@ -106,7 +105,7 @@ function TypingDots() {
     );
     anims.forEach(a => a.start());
     return () => anims.forEach(a => a.stop());
-  }, []);
+  }, [dots]);
 
   return (
     <View style={t.typingRow}>

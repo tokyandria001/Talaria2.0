@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Linking, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Linking, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 import { SettingsPage, settingsStyles as ss } from '../../components/settings/SettingsUI';
 import { FAQ, SUPPORT_EMAIL } from '../../constants/Settings';
 import { Colors } from '../../constants/Colors';

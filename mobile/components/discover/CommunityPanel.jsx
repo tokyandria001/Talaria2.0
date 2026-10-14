@@ -4,7 +4,6 @@ import {
   FlatList, ScrollView, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../../context/AuthContext';
 import client from '../../api/client';
 import ArticleCard from '../../components/ArticleCard';
 import ArticleDetailModal from '../../components/ArticleDetailModal';
@@ -26,7 +25,6 @@ const CATEGORIES = [
 ];
 
 export default function CommunityPanel({ header, autoWrite, onAutoWriteHandled, initialFilter, onFilterHandled, onWriteClosed }) {
-  const { user }   = useAuth();
   const { theme }  = useTheme();
   const insets      = useSafeAreaInsets();
   const tabBarH     = 64 + (insets.bottom || 16);
@@ -95,9 +93,6 @@ export default function CommunityPanel({ header, autoWrite, onAutoWriteHandled, 
     if (autoWrite) { setEditArticle(null); setShowWrite(true); onAutoWriteHandled?.(); }
   }, [autoWrite, onAutoWriteHandled]);
 
-  const initials = user
-    ? (((user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')) || (user.email?.[0] ?? '?')).toUpperCase()
-    : '?';
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.sableLune }]} edges={['top']}>

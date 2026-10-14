@@ -1,0 +1,11 @@
+# Analyse statique du backend (lancée en CI) : vendor/bin/phpstan analyse
+parameters:
+    level: 5
+    paths:
+        - src
+        - tests
+    symfony:
+        containerXmlPath: var/cache/dev/App_KernelDevDebugContainer.xml
+    doctrine:
+        # Colonnes obligatoires remplies avant l'enregistrement (createdAt, email...) : propriété ?type = null admise
+        allowNullablePropertyForRequiredField: true

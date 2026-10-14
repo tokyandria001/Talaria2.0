@@ -7,7 +7,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../context/AuthContext';
 import client from '../../api/client';
 import TalariaLogo from '../../components/TalariaLogo';
 import { Colors } from '../../constants/Colors';
@@ -655,7 +654,6 @@ function TripFormModal({ visible, trip, initialGroupId, onClose, onSaved }) {
    SCREEN
    ════════════════════════════════════ */
 export default function TripsScreen() {
-  const { user }   = useAuth();
   const { theme }  = useTheme();
   const router     = useRouter();
   const insets     = useSafeAreaInsets();

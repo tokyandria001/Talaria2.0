@@ -75,9 +75,8 @@ class AuthController extends AbstractController
     #[Route('/me', name: 'me', methods: ['GET'])]
     public function me(): JsonResponse
     {
-        /** @var User $user */
         $user = $this->getUser();
-        if (!$user) {
+        if (!$user instanceof User) {
             return $this->json(['message' => 'Non authentifié.'], 401);
         }
 

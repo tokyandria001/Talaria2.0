@@ -30,7 +30,7 @@ export default function UserProfileScreen() {
 
   const run = async (request, done) => {
     setBusy(true);
-    try { await request(); done ? done() : load(); }
+    try { await request(); if (done) done(); else load(); }
     catch (err) { Alert.alert('Erreur', err.response?.data?.message || 'Action impossible.'); }
     finally { setBusy(false); }
   };

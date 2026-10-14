@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (Symfony) — tests
+    name: Backend (Symfony) - tests et analyse
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -24,7 +24,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: intl, mbstring, pdo_sqlite, sodium
+          extensions: intl, mbstring, pdo_sqlite, sodium, fileinfo
           coverage: none
           tools: composer:v2
 
@@ -40,18 +40,77 @@ jobs:
       - name: Audit de sécurité des dépendances
         run: composer audit
 
+      - name: Configuration Symfony (YAML et services)
+        run: |
+          php bin/console lint:yaml config --parse-tags
+          php bin/console lint:container
+
+      - name: Mapping Doctrine des entités
+        run: php bin/console doctrine:schema:validate --skip-sync
+
+      # PHPStan lit le conteneur Symfony compilé (environnement dev)
+      - name: Analyse statique (PHPStan)
+        run: |
+          php bin/console cache:warmup --env=dev
+          vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
       - name: Clés JWT de test
         run: php bin/console lexik:jwt:generate-keypair --skip-if-exists --env=test
 
       - name: Tests (PHPUnit)
         run: vendor/bin/phpunit --testdox
 
-  frontend:
-    name: Frontend (React) — lint et build
+  migrations:
+    name: Backend - migrations sur MariaDB
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: backend
+    # Même moteur que la production (MariaDB 10.11 sur Debian 12)
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: talaria
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: mysql://root:root@127.0.0.1:3306/talaria?serverVersion=10.11.0-MariaDB&charset=utf8mb4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: intl, mbstring, pdo_mysql, sodium, fileinfo
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ hashFiles('backend/composer.lock') }}
+
+      - name: Installer les dépendances
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      # Toutes les migrations sur une base vide, puis : les entités correspondent-elles à la base ?
+      # (échoue si une entité a été modifiée sans migration)
+      - name: Migrations et schéma
+        run: |
+          php bin/console doctrine:migrations:migrate --no-interaction
+          php bin/console doctrine:schema:validate
+
+  mobile:
+    name: App mobile (Expo) - lint et build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
 
@@ -59,8 +118,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: mobile/package-lock.json
 
       - run: npm ci
-      - run: npm run lint
-      - run: npm run build
+
+      - name: Compatibilité des paquets avec le SDK Expo
+        run: npx expo-doctor
+
+      - name: Lint (ESLint)
+        run: npx expo lint
+
+      # Échoue si un import est cassé ou une image manquante (le même paquet que celui envoyé par eas update)
+      - name: Build Android (JavaScript)
+        run: npx expo export --platform android --output-dir dist
