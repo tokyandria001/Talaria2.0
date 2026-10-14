@@ -25,7 +25,7 @@ const CATEGORIES = [
   { value: 'Conseils',     label: '💡 Conseils' },
 ];
 
-export default function CommunityPanel({ header, autoWrite, onAutoWriteHandled, initialFilter, onFilterHandled }) {
+export default function CommunityPanel({ header, autoWrite, onAutoWriteHandled, initialFilter, onFilterHandled, onWriteClosed }) {
   const { user }   = useAuth();
   const { theme }  = useTheme();
   const insets      = useSafeAreaInsets();
@@ -218,8 +218,9 @@ export default function CommunityPanel({ header, autoWrite, onAutoWriteHandled, 
       <WriteArticleModal
         visible={showWrite}
         article={editArticle}
-        onClose={() => { setShowWrite(false); setEditArticle(null); }}
+        onClose={() => { setShowWrite(false); setEditArticle(null); onWriteClosed?.(false); }}
         onSaved={() => {
+          onWriteClosed?.(true);
           setShowWrite(false);
           setEditArticle(null);
           fetchArticles(true);

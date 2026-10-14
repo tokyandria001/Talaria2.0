@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import BottomSheet from './BottomSheet';
 import { comingSoon } from './AuthUI';
@@ -15,11 +15,13 @@ const ACTIONS = [
 /** Menu du bouton central « + Nouveau » de la barre d'onglets */
 export default function CreateMenu({ visible, onClose }) {
   const router = useRouter();
+  const pathname = usePathname();
 
   const choose = (a) => {
     onClose();
     if (a.soon) { comingSoon(a.soon); return; }
-    router.navigate(a.href);
+    // L'écran d'origine permet d'y revenir si l'on annule
+    router.navigate(typeof a.href === 'string' ? a.href : { ...a.href, params: { ...a.href.params, from: pathname } });
   };
 
   return (

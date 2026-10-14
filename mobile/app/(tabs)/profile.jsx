@@ -72,7 +72,7 @@ export default function ProfileScreen() {
   const openTrips = () => (trips.length ? router.navigate('/(tabs)/trips') : router.push('/new-trip'));
   const openArticles = () => router.navigate({
     pathname: '/(tabs)/discover',
-    params: counts?.articles ? { view: 'community', filter: 'mine' } : { view: 'community', action: 'write' },
+    params: counts?.articles ? { view: 'community', filter: 'mine' } : { view: 'community', action: 'write', from: '/profile' },
   });
   const openFriends = () => router.push(friends ? '/friends' : { pathname: '/friends', params: { tab: 'search' } });
 
