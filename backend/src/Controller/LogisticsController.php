@@ -299,6 +299,7 @@ class LogisticsController extends AbstractController
                     'address'    => $a->getAddress(),
                     'status'     => $a->getStatus(),
                     'proposedBy' => $a->getProposedBy() ? UserPresenter::public($a->getProposedBy()) : null,
+                    'suggested'  => $a->isSuggested(),
                     'likes'      => array_values(array_map(fn ($r) => UserPresenter::public($r->getUser()), array_filter($list, fn ($r) => $r->isLiked()))),
                     'dislikes'   => array_values(array_map(fn ($r) => UserPresenter::public($r->getUser()), array_filter($list, fn ($r) => !$r->isLiked()))),
                     'myReaction' => $mine ? ($mine->isLiked() ? 'like' : 'dislike') : null,

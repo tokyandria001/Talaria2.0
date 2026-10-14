@@ -134,7 +134,41 @@ final class GeoSearch
         });
     }
 
-    private static function distanceKm(float $lat1, float $lon1, float $lat2, float $lon2): float
+    /**
+     * Établissements d'un type OpenStreetMap ($osmTag, ex. « tourism:hotel ») à moins de $maxKm d'un point.
+     *
+     * @return list<array{name: string, address: ?string, city: ?string, latitude: float, longitude: float, distanceKm: float}>
+     */
+    public function nearbyByTag(string $query, string $osmTag, float $lat, float $lon, float $maxKm): array
+    {
+        $key = 'geo_tag_' . md5($query . $osmTag . sprintf('%.3f,%.3f,%.1f', $lat, $lon, $maxKm));
+
+        return $this->cache->get($key, function (ItemInterface $item) use ($query, $osmTag, $lat, $lon, $maxKm) {
+            $item->expiresAfter(7 * 86400);
+            $features = $this->photon(['q' => $query, 'osm_tag' => $osmTag, 'lat' => round($lat, 3), 'lon' => round($lon, 3), 'lang' => 'fr', 'limit' => 15]);
+
+            $results = [];
+            foreach ($features as $f) {
+                $p = $f['properties'] ?? [];
+                $c = $f['geometry']['coordinates'] ?? null;
+                if (empty($p['name']) || !is_array($c) || count($c) < 2) continue;
+                $km = self::distanceKm($lat, $lon, (float) $c[1], (float) $c[0]);
+                if ($km > $maxKm) continue;
+                $street = trim(($p['housenumber'] ?? '') . ' ' . ($p['street'] ?? ''));
+                $results[] = [
+                    'name'       => $p['name'],
+                    'address'    => implode(', ', array_filter([$street, trim(($p['postcode'] ?? '') . ' ' . ($p['city'] ?? ''))])) ?: null,
+                    'city'       => $p['city'] ?? null,
+                    'latitude'   => (float) $c[1],
+                    'longitude'  => (float) $c[0],
+                    'distanceKm' => round($km, 1),
+                ];
+            }
+            return $results;
+        });
+    }
+
+    public static function distanceKm(float $lat1, float $lon1, float $lat2, float $lon2): float
     {
         $r = M_PI / 180;
         $a = sin(($lat2 - $lat1) * $r / 2) ** 2 + cos($lat1 * $r) * cos($lat2 * $r) * sin(($lon2 - $lon1) * $r / 2) ** 2;

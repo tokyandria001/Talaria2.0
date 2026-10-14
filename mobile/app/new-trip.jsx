@@ -13,6 +13,7 @@ import FriendPickerSheet from '../components/groups/FriendPickerSheet';
 import GroupPickerSheet from '../components/groups/GroupPickerSheet';
 import UserAvatar from '../components/UserAvatar';
 import PlaceAutocomplete from '../components/PlaceAutocomplete';
+import AccommodationSuggestions from '../components/trip/AccommodationSuggestions';
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../constants/Colors';
 
@@ -81,6 +82,7 @@ export default function NewTripScreen() {
     transportMode: 'avion', departureCity: user?.homeCity ?? '', ticketPrice: '', eachBooksOwnTransport: false,
     distanceKm: '', distanceManual: false, fuelPrice: '1,72', fuelConsumption: '7', tollCost: '',
     accomType: 'airbnb', accomName: '', accomPrice: '', accomAddress: '', accomAddressPlace: null, accomLink: '',
+    accomSuggestion: null, accomManual: false,     // logement proposé par Talaria (son nom) ; « saisir le mien »
     needsRental: false, rentalCost: '', splitCostsEqually: true,
   });
   const set = (k) => (v) => setF(p => ({ ...p, [k]: v }));
@@ -137,6 +139,25 @@ export default function NewTripScreen() {
   const travelers = (group ? group.membersCount : 1) + selected.length;
   const n = nights(f.start, f.end);
   const accomPerPerson = int(f.accomPrice) ? Math.round(int(f.accomPrice) / travelers) : null;
+  const stayEnd = f.start && f.end && f.end > f.start ? f.end : f.start ? new Date(f.start.getTime() + 86_400_000) : null;
+
+  // Logement présélectionné par Talaria : le plus proche du centre, remplacé si le type change
+  const applySuggestion = (sg) => setF(p => ({
+    ...p, accomName: sg.name, accomAddress: sg.address ?? '', accomAddressPlace: null,
+    accomPrice: String(sg.estimatedPrice), accomLink: sg.link, accomSuggestion: sg.name, accomManual: false,
+  }));
+  const onSuggestionsLoaded = (list) => {
+    const first = list[0];
+    if (!first) return;
+    setF(p => (p.accomManual || (p.accomName.trim() && p.accomName !== p.accomSuggestion) ? p : {
+      ...p, accomName: first.name, accomAddress: first.address ?? '', accomAddressPlace: null,
+      accomPrice: String(first.estimatedPrice), accomLink: first.link, accomSuggestion: first.name,
+    }));
+  };
+  const enterOwnAccommodation = () => setF(p => ({
+    ...p, accomManual: true, accomSuggestion: null, accomName: '', accomAddress: '', accomAddressPlace: null, accomPrice: '', accomLink: '',
+  }));
+  const isSuggested = !!f.accomSuggestion && f.accomName.trim() === f.accomSuggestion;
 
   const canNext = [
     f.destination.trim() && (f.destinationPlace || geoDown) && f.start && f.end && f.end >= f.start,
@@ -199,7 +220,7 @@ export default function NewTripScreen() {
         await client.post(`/api/trips/${trip.id}/accommodations`, {
           name: f.accomName.trim(), type: f.accomType,
           checkIn: iso(f.start), checkOut: iso(f.end > f.start ? f.end : new Date(f.start.getTime() + 86_400_000)),
-          price: int(f.accomPrice), address: f.accomAddress.trim() || null,
+          price: int(f.accomPrice), address: f.accomAddress.trim() || null, suggested: isSuggested,
           link: link && !/^https?:\/\//i.test(link) ? `https://${link}` : link || null,
         }).catch(() => Alert.alert('Logement non enregistré', 'Le voyage est créé ; ajoutez le logement depuis « Modifier ».'));
       }
@@ -452,7 +473,17 @@ export default function NewTripScreen() {
                 ))}
               </View>
 
-              <Label>Logement</Label>
+              <Label>Proposé par Talaria</Label>
+              <AccommodationSuggestions place={f.destinationPlace} type={f.accomType} travelers={travelers}
+                checkIn={iso(f.start)} checkOut={iso(stayEnd)}
+                selectedName={isSuggested ? f.accomSuggestion : null} onPick={applySuggestion} onLoaded={onSuggestionsLoaded} />
+              {!f.accomManual && (
+                <TouchableOpacity onPress={enterOwnAccommodation} hitSlop={6} style={{ marginTop: 10 }}>
+                  <Text style={s.ownAccom}>J'ai déjà mon logement : le saisir</Text>
+                </TouchableOpacity>
+              )}
+
+              <Label>{isSuggested ? 'Logement choisi' : 'Logement'}</Label>
               <View style={s.accomCard}>
                 <Input placeholder="Nom (ex. Loft lumineux · Barrio Antiguo)" value={f.accomName} onChangeText={set('accomName')} />
                 <View style={s.row}>
@@ -710,6 +741,7 @@ const s = StyleSheet.create({
   chipOn:   { backgroundColor: Colors.parme, borderColor: Colors.parme },
   chipText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.text },
 
+  ownAccom:    { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.parme, textDecorationLine: 'underline' },
   accomCard:   { backgroundColor: Colors.white, borderRadius: 18, padding: 12, borderWidth: 1, borderColor: '#ece3e7' },
   accomFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   accomMeta:   { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.text },

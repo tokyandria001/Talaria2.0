@@ -6,6 +6,7 @@ import client from '../../api/client';
 import BottomSheet, { Chip, SheetLabel } from '../BottomSheet';
 import PlaceAutocomplete from '../PlaceAutocomplete';
 import UserAvatar from '../UserAvatar';
+import AccommodationSuggestions from './AccommodationSuggestions';
 import { Colors } from '../../constants/Colors';
 
 const ACCOM_TYPES = [
@@ -45,6 +46,7 @@ export default function LogisticsTab({ trip, onChanged }) {
   const [accomSheet, setAccomSheet] = useState(null);       // {} nouveau, ou hébergement à modifier
   const [transportSheet, setTransportSheet] = useState(null);
   const [meSheet, setMeSheet] = useState(false);
+  const [suggestSheet, setSuggestSheet] = useState(false);
   const base = `/api/trips/${trip.id}`;
 
   const load = useCallback(() => {
@@ -100,6 +102,10 @@ export default function LogisticsTab({ trip, onChanged }) {
         <Ionicons name="add" size={18} color={Colors.parme} />
         <Text style={s.addText}>Proposer un hébergement</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={s.suggestBtn} onPress={() => setSuggestSheet(true)} hitSlop={6}>
+        <Ionicons name="sparkles-outline" size={15} color={Colors.parme} />
+        <Text style={s.addSmallText}>Voir les logements proposés par Talaria</Text>
+      </TouchableOpacity>
 
       {/* Trajets de chacun */}
       <Text style={s.section}>Trajets</Text>
@@ -130,6 +136,12 @@ export default function LogisticsTab({ trip, onChanged }) {
         </View>
       ))}
 
+      <SuggestionsSheet visible={suggestSheet} trip={trip} travelers={data.travelersCount} onClose={() => setSuggestSheet(false)}
+        proposed={data.accommodations.map(a => a.name)}
+        onPropose={(sg, type) => run(() => client.post(`${base}/accommodations`, {
+          name: sg.name, type, checkIn: trip.startDate, checkOut: lastNight(trip), price: sg.estimatedPrice,
+          address: sg.address, link: sg.link, suggested: true,
+        }))} />
       <MeSheet visible={meSheet} me={data.me} onClose={() => setMeSheet(false)}
         onSave={(payload) => { setMeSheet(false); run(() => client.patch(`${base}/traveler`, payload), true); }} />
       <AccommodationSheet trip={trip} initial={accomSheet} onClose={() => setAccomSheet(null)}
@@ -154,10 +166,12 @@ function AccommodationCard({ a, travelers, onReact, onBook, onUnbook, onEdit }) 
       </View>
       <Text style={s.meta}>
         {fmt(a.checkIn)} → {fmt(a.checkOut)} · {nights(a.checkIn, a.checkOut)} nuit{nights(a.checkIn, a.checkOut) > 1 ? 's' : ''}
-        {a.price ? ` · ${eur(a.price)} (${eur(a.price / Math.max(1, travelers))}/pers)` : ' · prix à compléter'}
+        {a.price ? ` · ${a.suggested ? '≈ ' : ''}${eur(a.price)} (${eur(a.price / Math.max(1, travelers))}/pers)` : ' · prix à compléter'}
       </Text>
       {a.address ? <Text style={s.meta} numberOfLines={1}>📍 {a.address}</Text> : null}
-      {a.proposedBy && <Text style={s.by}>Proposé par {a.proposedBy.firstName || a.proposedBy.displayName}</Text>}
+      {a.suggested
+        ? <Text style={s.by}>✨ Suggéré par Talaria{a.proposedBy ? ` · ajouté par ${a.proposedBy.firstName || a.proposedBy.displayName}` : ''}</Text>
+        : a.proposedBy && <Text style={s.by}>Proposé par {a.proposedBy.firstName || a.proposedBy.displayName}</Text>}
 
       <View style={s.reactions}>
         <TouchableOpacity style={[s.react, a.myReaction === 'like' && s.reactOn]} onPress={() => onReact(a.myReaction === 'like' ? null : true)}>
@@ -213,6 +227,33 @@ function TransportRow({ o, mine, onChoose, onEdit, onDelete }) {
         </>
       ) : (o.chosen ? <Text style={s.chosenTag}>Choisi</Text> : null)}
     </View>
+  );
+}
+
+/** Départ du logement : le lendemain du dernier jour (une nuit au moins) */
+function lastNight(trip) {
+  const d = utc(trip.endDate > trip.startDate ? trip.endDate : trip.startDate);
+  if (trip.endDate <= trip.startDate) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Logements proposés par Talaria pour tout le séjour, à proposer au groupe */
+function SuggestionsSheet({ visible, trip, travelers, proposed, onClose, onPropose }) {
+  const [type, setType] = useState('hotel');
+  const place = trip.destinationLatitude != null ? { latitude: trip.destinationLatitude, longitude: trip.destinationLongitude, name: trip.destination } : null;
+  return (
+    <BottomSheet visible={visible} title="Proposés par Talaria" onClose={onClose}>
+      <SheetLabel style={{ marginTop: 4 }}>Type</SheetLabel>
+      <View style={s.chips}>{ACCOM_TYPES.filter(t => t.value !== 'autre').map(t => <Chip key={t.value} label={t.label} active={type === t.value} onPress={() => setType(t.value)} />)}</View>
+      <SheetLabel>Du {fmt(trip.startDate)} au {fmt(lastNight(trip))} · {travelers} voyageur{travelers > 1 ? 's' : ''}</SheetLabel>
+      {visible && (
+        <AccommodationSuggestions place={place} type={type} travelers={travelers} checkIn={trip.startDate} checkOut={lastNight(trip)}
+          selectedName={null} pickLabel="Proposer"
+          onPick={(sg) => (proposed.includes(sg.name)
+            ? Alert.alert('Déjà proposé', `« ${sg.name} » est déjà dans les hébergements.`)
+            : (onPropose(sg, type), onClose()))} />
+      )}
+    </BottomSheet>
   );
 }
 
@@ -421,6 +462,7 @@ const s = StyleSheet.create({
   bookText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.white },
   unbookText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.error },
 
+  suggestBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12 },
   add: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderStyle: 'dashed', borderColor: Colors.parme, borderRadius: 100, paddingVertical: 12 },
   addText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.parme },
 

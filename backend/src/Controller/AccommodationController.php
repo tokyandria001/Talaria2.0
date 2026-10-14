@@ -136,6 +136,7 @@ class AccommodationController extends AbstractController
         if (array_key_exists('specialPriceNote', $data)) $a->setSpecialPriceNote($text('specialPriceNote'));
         if (array_key_exists('link', $data))             $a->setLink($text('link'));
         if (array_key_exists('address', $data))          $a->setAddress($text('address'));
+        if (array_key_exists('suggested', $data))        $a->setSuggested((bool) $data['suggested']);
     }
 
     /** Voyage visible par l'utilisateur (créateur ou membre du groupe) : il peut en modifier le planning */
@@ -176,6 +177,7 @@ class AccommodationController extends AbstractController
             'address'          => $a->getAddress(),
             'status'           => $a->getStatus(),
             'proposedBy'       => $a->getProposedBy() ? UserPresenter::public($a->getProposedBy()) : null,
+            'suggested'        => $a->isSuggested(),
             'createdAt'        => $a->getCreatedAt()->format('Y-m-d'),
         ];
     }

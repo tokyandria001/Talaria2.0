@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Service\AccommodationSuggester;
 use App\Service\GeoSearch;
 use App\Service\GeoSearchUnavailable;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -58,6 +59,33 @@ class GeoController extends AbstractController
         } catch (GeoSearchUnavailable) {
             return $this->json(['message' => 'La recherche de lieux est momentanément indisponible.', 'hubs' => []], 503);
         }
+    }
+
+    /**
+     * Logements proposés par Talaria : lat, lon, type (hotel|auberge|airbnb|habitant), checkIn, checkOut
+     * (AAAA-MM-JJ), travelers, city. Prix estimé selon le style de voyage de l'utilisateur.
+     */
+    #[Route('/api/geo/accommodations', name: 'api_geo_accommodations', methods: ['GET'])]
+    public function accommodations(Request $request, AccommodationSuggester $suggester, RateLimiterFactory $geoSearchLimiter): JsonResponse
+    {
+        /** @var User $me */
+        $me = $this->getUser();
+        if (!$geoSearchLimiter->create((string) $me->getId())->consume()->isAccepted()) {
+            return $this->json(['message' => 'Trop de recherches, réessayez dans un instant.'], 429);
+        }
+        $q = $request->query;
+        $lat = $q->get('lat'); $lon = $q->get('lon');
+        if (!is_numeric($lat) || !is_numeric($lon) || abs((float) $lat) > 90 || abs((float) $lon) > 180) {
+            return $this->json(['message' => 'Position de la destination requise (lat, lon).'], 400);
+        }
+        $in = \DateTimeImmutable::createFromFormat('!Y-m-d', (string) $q->get('checkIn'));
+        $out = \DateTimeImmutable::createFromFormat('!Y-m-d', (string) $q->get('checkOut'));
+        if (!$in || !$out || $out <= $in) return $this->json(['message' => "Dates d'arrivée et de départ requises."], 400);
+
+        return $this->json(['suggestions' => $suggester->suggest(
+            (float) $lat, (float) $lon, (string) $q->get('type', 'hotel'), $in, $out,
+            (int) $q->get('travelers', 1), $me->getTravelStyle(), $q->get('city') ? (string) $q->get('city') : null,
+        )]);
     }
 
     /** Distance et durée en voiture : from=lat,lng & to=lat,lng */

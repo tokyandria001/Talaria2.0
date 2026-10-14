@@ -38,6 +38,15 @@ final class PhotonMockResponseFactory
                 $this->feature('Aéroport Lyon Saint-Exupéry', 'house', [5.0811, 45.7256], ['city' => 'Colombier']),
             ]]));
         }
+        // Hôtels autour de Lyon : un nom vague (« Hotel »), un doublon de la base et un hôtel trop loin, écartés
+        if (($query['osm_tag'] ?? '') === 'tourism:hotel') {
+            return new MockResponse(json_encode(['type' => 'FeatureCollection', 'features' => [
+                $this->feature('Hotel', 'house', [4.835, 45.760], ['city' => 'Lyon']),
+                $this->feature('Hôtel des Célestins', 'house', [4.831, 45.759], ['housenumber' => '4', 'street' => 'Rue des Archers', 'postcode' => '69002', 'city' => 'Lyon']),
+                $this->feature('Grand Hôtel Bellecour', 'house', [4.832, 45.757], ['city' => 'Lyon']),
+                $this->feature('Hôtel de Vienne', 'house', [4.874, 45.525], ['city' => 'Vienne']),
+            ]]));
+        }
         if (str_starts_with((string) ($query['q'] ?? ''), 'adresse')) {
             return new MockResponse(json_encode(['type' => 'FeatureCollection', 'features' => [
                 $this->feature('', 'house', [2.33, 48.87], ['housenumber' => '12', 'street' => 'Rue de la Paix', 'postcode' => '75002', 'city' => 'Paris', 'country' => 'France']),

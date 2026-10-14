@@ -70,6 +70,10 @@ class Accommodation
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?User $proposedBy = null;
 
+    /** Logement proposé par Talaria (prix estimé tant qu'il n'est pas corrigé) */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $suggested = false;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -117,6 +121,8 @@ class Accommodation
     public function getStatus(): string { return $this->status; }
     public function setStatus(string $v): static { $this->status = $v; return $this; }
 
+    public function isSuggested(): bool { return $this->suggested; }
+    public function setSuggested(bool $v): static { $this->suggested = $v; return $this; }
     public function getProposedBy(): ?User { return $this->proposedBy; }
     public function setProposedBy(?User $v): static { $this->proposedBy = $v; return $this; }
 
