@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { Map as MapLibreMap, Camera, GeoJSONSource, Layer, Images, UserLocation } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../../api/client';
 import { Colors } from '../../constants/Colors';
-import { categoryOf, priceLevel, PLACE_CATEGORIES, FILTER_CATEGORIES } from '../../constants/PlaceCategories';
+import { categoryOf, priceLevel, FILTER_CATEGORIES } from '../../constants/PlaceCategories';
 import { comingSoon } from '../AuthUI';
 import MapFiltersSheet, { DEFAULT_FILTERS, applyFilters } from './MapFiltersSheet';
 import PlaceDetailSheet from './PlaceDetailSheet';
@@ -14,16 +14,12 @@ import AddPlaceSheet from './AddPlaceSheet';
 import { CLUSTER_IMAGES, PIN_IMAGES, PIN_ACTIVE_IMAGES } from '../../constants/MarkerImages';
 import { MAP_STYLE, MAP_ATTRIBUTION } from '../../constants/mapStyle';
 
-/* Raccourcis du design : Logements et Activités filtrent la carte ; Vols et Destinations arrivent plus tard */
-const SHORTCUTS = [
-  { value: 'vols',         label: 'Vols',         icon: 'airplane' },
-  { value: 'logements',    label: 'Logements',    icon: 'business' },
-  { value: 'activites',    label: 'Activités',    icon: 'bicycle' },
-  { value: 'destinations', label: 'Destinations', icon: 'earth' },
-];
-/** Tags envoyés au serveur pour les raccourcis Logements / Activités */
-const LODGING_TAGS = ['hotel', 'auberge', 'camping'];
-const ACTIVITY_TAGS = PLACE_CATEGORIES.flatMap(c => c.tags).filter(t => !LODGING_TAGS.includes(t));
+/** Raccourcis de l'accueil (Logements, Activités) : catégories cochées dans les filtres à l'ouverture */
+const LODGING = ['hotel', 'auberge', 'camping'];
+const SHORTCUT_CATEGORIES = {
+  logements: LODGING,
+  activites: FILTER_CATEGORIES.map(c => c.value).filter(v => !LODGING.includes(v)),
+};
 
 /** Zone visible de la carte ([ouest, sud, est, nord]) → bbox « sud,ouest,nord,est » de l'API */
 const toBbox = ([west, south, east, north]) => [south, west, north, east].map(v => v.toFixed(4)).join(',');
@@ -66,7 +62,6 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
   const [truncated,  setTruncated]  = useState(false);
   const [search,     setSearch]     = useState('');
   const [showSearch, setShowSearch] = useState(false);
-  const [shortcut,   setShortcut]   = useState(null);
   const [filters,    setFilters]    = useState(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [userLoc,    setUserLoc]    = useState(null);
@@ -92,12 +87,9 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
 
   // Lieux de la zone visible uniquement (près de 100 000 lieux en base) : catégories filtrées par le serveur,
   // rechargement quand la carte bouge, léger délai pendant la frappe et les déplacements
-  const tagsFor = useCallback((categories) => {
-    const chosen = FILTER_CATEGORIES.filter(c => categories.includes(c.value)).flatMap(c => c.tags);
-    if (shortcut === 'logements') return chosen.length ? chosen.filter(t => LODGING_TAGS.includes(t)) : LODGING_TAGS;
-    if (shortcut === 'activites') return chosen.length ? chosen.filter(t => ACTIVITY_TAGS.includes(t)) : ACTIVITY_TAGS;
-    return chosen;
-  }, [shortcut]);
+  const tagsFor = useCallback((categories) => (
+    FILTER_CATEGORIES.filter(c => categories.includes(c.value)).flatMap(c => c.tags)
+  ), []);
   const serverTags = useMemo(() => tagsFor(filters.categories), [tagsFor, filters.categories]);
 
   const hasFilter = serverTags.length > 0 || search !== '';
@@ -121,10 +113,11 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
     return () => { cancelled = true; clearTimeout(id); };
   }, [search, view.bounds, serverTags, hasFilter]);
 
-  // Raccourci choisi depuis l'accueil : la carte s'ouvre déjà filtrée
+  // Raccourci choisi depuis l'accueil : la carte s'ouvre déjà filtrée (modifiable dans « Filtrer »)
   useEffect(() => {
-    if (initialShortcut === 'logements' || initialShortcut === 'activites') {
-      setShortcut(initialShortcut);
+    const categories = SHORTCUT_CATEGORIES[initialShortcut];
+    if (categories) {
+      setFilters(f => ({ ...f, categories }));
       onShortcutHandled?.();
     }
   }, [initialShortcut, onShortcutHandled]);
@@ -140,14 +133,6 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
   const activeFilterCount = filters.categories.length
     + (filters.budget[0] > DEFAULT_FILTERS.budget[0] || filters.budget[1] < DEFAULT_FILTERS.budget[1] ? 1 : 0)
     + (filters.distance ? 1 : 0);
-
-  const pressShortcut = (value) => {
-    if (value === 'vols' || value === 'destinations') {
-      comingSoon(value === 'vols' ? 'La recherche de vols' : 'La découverte de destinations');
-      return;
-    }
-    setShortcut(s => (s === value ? null : value));
-  };
 
   const toggleLike = async (place) => {
     try {
@@ -255,18 +240,9 @@ export default function MapPanel({ header, autoAdd, onAutoAddHandled, initialSho
         </GeoJSONSource>
       </MapLibreMap>
 
-      {/* En-tête + raccourcis */}
+      {/* En-tête + recherche */}
       <View style={[s.top, { paddingTop: insets.top }]}>
         {header}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.shortcuts}>
-          {SHORTCUTS.map(sc => (
-            <TouchableOpacity key={sc.value} style={[s.shortcut, shortcut === sc.value && s.shortcutActive]}
-              onPress={() => pressShortcut(sc.value)} activeOpacity={0.85}>
-              <Text style={s.shortcutText}>{sc.label}</Text>
-              <Ionicons name={sc.icon} size={16} color={Colors.parme} />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
         {showSearch && (
           <View style={s.searchBar}>
             <Ionicons name="search" size={16} color={Colors.textMuted} />
@@ -371,14 +347,6 @@ const s = StyleSheet.create({
   attribution:  { position: 'absolute', left: 8, fontFamily: 'BricolageGrotesque_400Regular', fontSize: 9, color: 'rgba(30,8,22,0.6)' },
 
   top: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: 'rgba(252,249,241,0.92)', paddingBottom: 10 },
-  shortcuts: { paddingHorizontal: 16, gap: 8 },
-  shortcut: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.white, borderRadius: 10, borderWidth: 1.5, borderColor: 'transparent',
-    paddingVertical: 8, paddingHorizontal: 12,
-  },
-  shortcutActive: { borderColor: Colors.parme },
-  shortcutText:   { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.text },
 
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 10,

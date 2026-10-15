@@ -90,7 +90,7 @@ export default function GroupScreen() {
             <Text style={s.inviteText}>Vous êtes invité à rejoindre ce groupe.</Text>
             <View style={s.inviteActions}>
               <TouchableOpacity style={[s.smallBtn, s.smallBtnOutline]} onPress={() => respond(false)}>
-                <Text style={[s.smallBtnText, { color: Colors.parme }]}>Refuser</Text>
+                <Text style={[s.smallBtnText, { color: Colors.white }]}>Refuser</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.smallBtn} onPress={() => respond(true)}>
                 <Text style={s.smallBtnText}>Rejoindre</Text>

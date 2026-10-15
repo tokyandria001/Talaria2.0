@@ -12,6 +12,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { AuthProvider } from '../context/AuthContext';
 import { ThemeProvider } from '../context/ThemeContext';
 import { Colors } from '../constants/Colors';
+import NotificationBanner from '../components/NotificationBanner';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -52,6 +53,7 @@ export default function RootLayout() {
             <Stack.Screen name="trip-map/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="planning/[id]" options={{ animation: 'slide_from_right' }} />
           </Stack>
+          <NotificationBanner />
           </ThemeProvider>
         </AuthProvider>
       </SafeAreaProvider>

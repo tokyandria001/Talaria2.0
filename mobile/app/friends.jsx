@@ -107,12 +107,12 @@ export default function FriendsScreen() {
             </UserRow>
           ) : item.kind === 'received' ? (
             <UserRow user={item.user} subtitle="Vous a envoyé une demande">
-              <TouchableOpacity style={[s.roundBtn, s.roundBtnPrimary]}
-                onPress={() => act(() => client.post(`/api/friends/requests/${item.id}/accept`), `Vous êtes maintenant ami avec ${item.user.displayName}.`)}>
-                <Ionicons name="checkmark" size={18} color={Colors.white} />
+              <TouchableOpacity style={s.pillBtn} onPress={() => act(() => client.post(`/api/friends/requests/${item.id}/decline`))}>
+                <Text style={s.pillBtnText}>Refuser</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.roundBtn} onPress={() => act(() => client.post(`/api/friends/requests/${item.id}/decline`))}>
-                <Ionicons name="close" size={18} color={Colors.parme} />
+              <TouchableOpacity style={[s.pillBtn, s.pillBtnPrimary]}
+                onPress={() => act(() => client.post(`/api/friends/requests/${item.id}/accept`), `Vous êtes maintenant ami avec ${item.user.displayName}.`)}>
+                <Text style={[s.pillBtnText, { color: Colors.white }]}>Accepter</Text>
               </TouchableOpacity>
             </UserRow>
           ) : (
@@ -267,8 +267,6 @@ const s = StyleSheet.create({
   sub:     { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 
-  roundBtn:        { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderColor: Colors.parme, alignItems: 'center', justifyContent: 'center' },
-  roundBtnPrimary: { backgroundColor: Colors.parme },
   pillBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     borderWidth: 1.5, borderColor: Colors.parme, borderRadius: 100, paddingVertical: 6, paddingHorizontal: 12,

@@ -735,7 +735,19 @@ export default function TripsScreen() {
     <SafeAreaView style={[s.root, { backgroundColor: theme.sableLune }]} edges={['top']}>
       {/* Header */}
       <View style={[s.header, { backgroundColor: theme.white, borderBottomColor: theme.border }]}>
+        <View style={s.headerSide}>
+          <TouchableOpacity style={s.createBtn} onPress={() => openCreate()}>
+            <Ionicons name="add" size={18} color={Colors.white} />
+            <Text style={s.createBtnText}>Nouveau</Text>
+          </TouchableOpacity>
+        </View>
         <TalariaLogo height={28} />
+        <View style={[s.headerSide, { justifyContent: 'flex-end' }]}>
+          <TouchableOpacity style={s.groupsBtn} onPress={() => router.push('/groups')}>
+            <Ionicons name="people-outline" size={16} color={Colors.parme} />
+            <Text style={s.groupsBtnText}>Groupes</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={s.titleRow}>
@@ -746,16 +758,6 @@ export default function TripsScreen() {
               ? `${trips.length} voyage${trips.length > 1 ? 's' : ''} planifié${trips.length > 1 ? 's' : ''}`
               : 'Planifiez votre prochain voyage'}
           </Text>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity style={s.groupsBtn} onPress={() => router.push('/groups')}>
-            <Ionicons name="people-outline" size={16} color={Colors.parme} />
-            <Text style={s.groupsBtnText}>Groupes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.createBtn} onPress={() => openCreate()}>
-            <Ionicons name="add" size={18} color={Colors.white} />
-            <Text style={s.createBtnText}>Nouveau</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -803,10 +805,13 @@ const s = StyleSheet.create({
   root:   { flex: 1, backgroundColor: Colors.sableLune ?? '#fcf9f1' },
 
   header: {
-    paddingHorizontal: 20, paddingVertical: 12,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 10,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
     backgroundColor: Colors.white,
   },
+  // Nouveau à gauche, Groupes à droite, logo au centre
+  headerSide: { flex: 1, flexDirection: 'row', alignItems: 'center' },
 
   titleRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

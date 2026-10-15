@@ -1,16 +1,15 @@
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { assetUrl } from '../../api/client';
 import TalariaLogo from '../TalariaLogo';
 import { Colors } from '../../constants/Colors';
 
-const TITLES = { map: 'La Carte', community: 'Communauté' };
+const TITLES = { map: 'Carte', community: 'Communauté' };
 
 /**
- * En-tête de l'onglet Découvrir (maquette 4) : titre, logo au centre, avatar.
- * Le titre bascule entre la carte et la communauté.
+ * En-tête de l'onglet Découvrir (maquette 4) : bouton vers l'autre vue, logo au centre, avatar.
+ * Sur la carte le bouton mène à la communauté, sur la communauté à la carte.
  */
 export default function DiscoverHeader({ view, onChangeView, style }) {
   const router   = useRouter();
@@ -22,11 +21,12 @@ export default function DiscoverHeader({ view, onChangeView, style }) {
 
   return (
     <View style={[s.row, style]}>
-      <TouchableOpacity style={s.side} onPress={() => onChangeView(other)} activeOpacity={0.8}
-        accessibilityRole="button" accessibilityLabel={`${TITLES[view]}, afficher ${TITLES[other]}`}>
-        <Text style={s.title}>{TITLES[view]}</Text>
-        <Ionicons name="swap-horizontal" size={15} color={Colors.parme} />
-      </TouchableOpacity>
+      <View style={s.side}>
+        <TouchableOpacity style={s.switch} onPress={() => onChangeView(other)} activeOpacity={0.85}
+          accessibilityRole="button" accessibilityLabel={`Afficher ${TITLES[other]}`}>
+          <Text style={s.switchText} numberOfLines={1}>{TITLES[other]}</Text>
+        </TouchableOpacity>
+      </View>
 
       <TalariaLogo height={30} />
 
@@ -45,7 +45,8 @@ const s = StyleSheet.create({
   row:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8 },
   side:  { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   right: { justifyContent: 'flex-end' },
-  title: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 20, color: Colors.parme },
+  switch:     { backgroundColor: Colors.parme, borderRadius: 100, paddingVertical: 7, paddingHorizontal: 12 },
+  switchText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 12, color: Colors.white },
 
   avatar:      { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: Colors.parme },
   avatarEmpty: { backgroundColor: Colors.parme, alignItems: 'center', justifyContent: 'center' },

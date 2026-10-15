@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../api/client';
 import { Colors } from '../constants/Colors';
+import { TYPE_ICON, TYPE_COLOR } from '../constants/Notifications';
 
 function timeAgo(iso) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -19,8 +20,6 @@ function timeAgo(iso) {
   return `il y a ${Math.floor(h / 24)}j`;
 }
 
-const TYPE_ICON = { like: 'heart', comment: 'chatbubble', friend_request: 'person-add', friend_accept: 'people', group_invite: 'mail', group_join: 'people-circle', group_trip: 'airplane', trip_update: 'calendar', expense: 'cash', settlement: 'swap-horizontal' };
-const TYPE_COLOR = { like: '#ef4444', comment: Colors.parme, friend_request: Colors.parme, friend_accept: '#16a34a', group_invite: Colors.parme, group_join: '#16a34a', group_trip: Colors.parme, trip_update: Colors.parme, expense: Colors.parme, settlement: '#16a34a' };
 
 export default function NotificationsScreen() {
   const router = useRouter();
