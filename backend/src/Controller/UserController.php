@@ -76,6 +76,7 @@ class UserController extends AbstractController
                 'articles' => $this->em->getRepository(Article::class)->count(['author' => $user]),
                 'friends'  => count($this->friendships->findFriendshipsOf($user)),
                 'tripsTogether' => count($together),
+                'referrals' => $this->em->getRepository(User::class)->count(['referredBy' => $user]),
             ],
             'tripsTogether' => array_map(fn (Trip $t) => $this->tripSummary($t), array_reverse($together)),
             'nextTripTogether' => $next ? $this->tripSummary($next) : null,

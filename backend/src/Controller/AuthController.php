@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\User;
 use App\Service\GoogleTokenVerifier;
+use App\Service\Referrals;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Security\Http\Authentication\AuthenticationSuccessHandler;
@@ -25,6 +26,7 @@ class AuthController extends AbstractController
         EntityManagerInterface $em,
         ValidatorInterface $validator,
         RateLimiterFactory $registrationLimiter,
+        Referrals $referrals,
     ): JsonResponse {
         // Anti-création de comptes en masse : 5 inscriptions par heure et par IP
         $limit = $registrationLimiter->create($request->getClientIp() ?? 'unknown')->consume();
@@ -57,6 +59,8 @@ class AuthController extends AbstractController
         // Pseudo facultatif (champ "username" du site web)
         $user->setPseudo(!empty($data['username']) ? trim((string) $data['username']) : null);
         $user->setPassword($hasher->hashPassword($user, $data['password']));
+        // Lien d'invitation (?invite=<pseudo du parrain>) : facultatif, ignoré s'il ne correspond à personne
+        $referrals->apply($user, $data['invite'] ?? null);
 
         $errors = $validator->validate($user);
         if (count($errors) > 0) {
@@ -88,6 +92,7 @@ class AuthController extends AbstractController
         EntityManagerInterface $em,
         RateLimiterFactory $registrationLimiter,
         AuthenticationSuccessHandler $success,
+        Referrals $referrals,
     ): JsonResponse {
         $data = json_decode($request->getContent(), true) ?? [];
         $idToken = is_string($data['idToken'] ?? null) ? $data['idToken'] : '';
@@ -117,6 +122,7 @@ class AuthController extends AbstractController
                 ->setFirstName(isset($claims['given_name']) ? mb_substr($claims['given_name'], 0, 100) : null)
                 ->setLastName(isset($claims['family_name']) ? mb_substr($claims['family_name'], 0, 100) : null)
                 ->setProfilePicture(is_string($picture) && strlen($picture) <= 255 ? $picture : null);
+            $referrals->apply($user, $data['invite'] ?? null);
             $em->persist($user);
         } elseif ($user->getGoogleId() !== null && $user->getGoogleId() !== $claims['sub']) {
             return $this->json($this->error('Cet email est déjà lié à un autre compte Google.'), 409);
@@ -133,14 +139,14 @@ class AuthController extends AbstractController
     }
 
     #[Route('/me', name: 'me', methods: ['GET'])]
-    public function me(): JsonResponse
+    public function me(Referrals $referrals): JsonResponse
     {
         $user = $this->getUser();
         if (!$user instanceof User) {
             return $this->json(['message' => 'Non authentifié.'], 401);
         }
 
-        return $this->json(['user' => $this->serializeUser($user)]);
+        return $this->json(['user' => $this->serializeUser($user) + ['referralsCount' => $referrals->count($user)]]);
     }
 
     /** Erreur au format { message, detail } : "detail" est le champ lu par le site web app.talaria.world */

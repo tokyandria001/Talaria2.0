@@ -170,6 +170,14 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $deletionRequestedAt = null;
 
+    /** Parrain : la personne dont le lien d'invitation a mené à l'inscription (vidé si son compte est supprimé) */
+    #[ORM\ManyToOne(targetEntity: self::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?User $referredBy = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $referredAt = null;
+
     /* ── Onboarding (questions après l'inscription) ── */
 
     /** Année de naissance : sert aux tarifs adaptés (-26 ans...), jamais affichée aux autres */
@@ -249,6 +257,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getPassword(): ?string { return $this->password; }
     public function setPassword(string $password): static { $this->password = $password; return $this; }
     public function hasPassword(): bool { return $this->password !== null; }
+
+    public function getReferredBy(): ?User { return $this->referredBy; }
+    public function setReferredBy(?User $referredBy): static { $this->referredBy = $referredBy; return $this; }
+    public function getReferredAt(): ?\DateTimeImmutable { return $this->referredAt; }
+    public function setReferredAt(?\DateTimeImmutable $referredAt): static { $this->referredAt = $referredAt; return $this; }
 
     public function getGoogleId(): ?string { return $this->googleId; }
     public function setGoogleId(?string $googleId): static { $this->googleId = $googleId; return $this; }

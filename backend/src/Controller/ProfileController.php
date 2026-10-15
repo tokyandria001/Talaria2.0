@@ -13,6 +13,7 @@ use App\Entity\TripMessage;
 use App\Entity\User;
 use App\Service\Blocking;
 use App\Service\ImageUploader;
+use App\Service\Referrals;
 use App\Service\SessionTokens;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
@@ -40,6 +41,7 @@ class ProfileController extends AbstractController
             'articles' => $this->em->getRepository(Article::class)->count(['author' => $user]),
             'places'   => $this->em->getRepository(Place::class)->count(['createdBy' => $user]),
             'trips'    => $this->em->getRepository(Trip::class)->count(['user' => $user]),
+            'referrals' => $this->em->getRepository(User::class)->count(['referredBy' => $user]),
         ];
         return $this->json(['user' => $this->serializeUser($user), 'counts' => $counts]);
     }
@@ -247,7 +249,9 @@ class ProfileController extends AbstractController
 
         $data = [
             'exportedAt' => $date(new \DateTimeImmutable()),
-            'account'    => $this->serializeUser($me),
+            'account'    => $this->serializeUser($me) + [
+                'referredBy' => $me->getReferredBy() ? UserPresenter::public($me->getReferredBy()) : null,
+            ],
             'trips'      => array_map(fn (Trip $t) => [
                 'id' => $t->getId(), 'title' => $t->getTitle(), 'destination' => $t->getDestination(),
                 'departureCity' => $t->getDepartureCity(),
@@ -288,6 +292,19 @@ class ProfileController extends AbstractController
     }
 
     /** Personnes que j'ai bloquées */
+    /** Mes filleuls : les personnes inscrites avec mon lien d'invitation */
+    #[Route('/referrals', name: 'referrals', methods: ['GET'])]
+    public function referrals(Referrals $referrals): JsonResponse
+    {
+        /** @var User $me */
+        $me = $this->getUser();
+        $list = array_map(fn (User $u) => UserPresenter::public($u) + [
+            'referredAt' => $u->getReferredAt()?->format(\DateTimeInterface::ATOM),
+        ], $referrals->referredBy($me));
+
+        return $this->json(['count' => count($list), 'referrals' => $list]);
+    }
+
     #[Route('/blocked', name: 'blocked', methods: ['GET'])]
     public function blocked(Blocking $blocking): JsonResponse
     {
