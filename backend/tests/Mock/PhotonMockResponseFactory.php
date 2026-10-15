@@ -13,12 +13,18 @@ final class PhotonMockResponseFactory
 {
     public static int $calls = 0;
 
+    /** Certificats publics renvoyés pour la connexion Google (kid => certificat PEM), fixés par le test */
+    public static array $googleCerts = [];
+
     public function __invoke(string $method, string $url, array $options = []): ResponseInterface
     {
         self::$calls++;
         parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
         if (($query['q'] ?? '') === 'panne' || str_contains($url, '0.00000,0.00000')) {
             return new MockResponse('', ['http_code' => 503]);
+        }
+        if (str_contains($url, 'googleapis.com/oauth2/v1/certs')) {
+            return new MockResponse(json_encode(self::$googleCerts));
         }
         if (str_contains($url, 'router.project-osrm.org')) {
             return new MockResponse(json_encode(['code' => 'Ok', 'routes' => [['distance' => 465_800, 'duration' => 17_880]]]));

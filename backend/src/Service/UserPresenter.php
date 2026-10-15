@@ -48,6 +48,9 @@ final class UserPresenter
             'invitePolicy'      => $u->getInvitePolicy(),
             'settings'          => $u->getSettings(),
             'passwordChangedAt' => $u->getPasswordChangedAt()?->format(\DateTimeInterface::ATOM),
+            // Compte Google sans mot de passe : pas de mot de passe actuel à demander
+            'hasPassword'       => $u->hasPassword(),
+            'googleLinked'      => $u->getGoogleId() !== null,
             'deletionScheduledFor' => $u->getDeletionScheduledFor()?->format('Y-m-d'),
             'createdAt'         => $u->getCreatedAt()?->format(\DateTimeInterface::ATOM),
             // Onboarding (l'âge reste privé : seulement dans le profil de l'utilisateur lui-même)

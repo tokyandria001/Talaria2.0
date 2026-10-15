@@ -3,8 +3,10 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Service\GoogleTokenVerifier;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
+use Lexik\Bundle\JWTAuthenticationBundle\Security\Http\Authentication\AuthenticationSuccessHandler;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -43,7 +45,9 @@ class AuthController extends AbstractController
 
         $existing = $em->getRepository(User::class)->findOneBy(['email' => $data['email']]);
         if ($existing) {
-            return $this->json($this->error('Un compte existe déjà avec cet email.'), 409);
+            return $this->json($this->error($existing->hasPassword()
+                ? 'Un compte existe déjà avec cet email.'
+                : 'Un compte existe déjà avec cet email : connecte-toi avec Google.'), 409);
         }
 
         $user = new User();
@@ -70,6 +74,62 @@ class AuthController extends AbstractController
             'message' => 'Compte créé avec succès.',
             'user' => $this->serializeUser($user),
         ], 201);
+    }
+
+    /**
+     * Connexion ou inscription avec Google : { idToken } (jeton obtenu par l'app ou le site auprès de Google).
+     * Compte retrouvé par son identifiant Google, sinon par son email (il est alors lié à Google),
+     * sinon créé sans mot de passe. Réponse identique à /api/auth/login, plus « isNewUser ».
+     */
+    #[Route('/google', name: 'google', methods: ['POST'])]
+    public function google(
+        Request $request,
+        GoogleTokenVerifier $verifier,
+        EntityManagerInterface $em,
+        RateLimiterFactory $registrationLimiter,
+        AuthenticationSuccessHandler $success,
+    ): JsonResponse {
+        $data = json_decode($request->getContent(), true) ?? [];
+        $idToken = is_string($data['idToken'] ?? null) ? $data['idToken'] : '';
+        if ($idToken === '') {
+            return $this->json($this->error('Jeton Google requis (idToken).'), 400);
+        }
+
+        try {
+            $claims = $verifier->verify($idToken);
+        } catch (\RuntimeException $e) {
+            return $this->json($this->error('Connexion Google refusée.', $e->getMessage()), 401);
+        }
+
+        $repo = $em->getRepository(User::class);
+        $user = $repo->findOneBy(['googleId' => $claims['sub']]) ?? $repo->findOneBy(['email' => $claims['email']]);
+        $isNew = $user === null;
+
+        if ($isNew) {
+            // Même limite que l'inscription classique : 5 comptes par heure et par IP
+            $limit = $registrationLimiter->create($request->getClientIp() ?? 'unknown')->consume();
+            if (!$limit->isAccepted()) {
+                return $this->json($this->error('Trop d\'inscriptions depuis cette adresse. Réessayez plus tard.'), 429);
+            }
+            $picture = $claims['picture'] ?? null;
+            $user = (new User())
+                ->setEmail($claims['email'])
+                ->setFirstName(isset($claims['given_name']) ? mb_substr($claims['given_name'], 0, 100) : null)
+                ->setLastName(isset($claims['family_name']) ? mb_substr($claims['family_name'], 0, 100) : null)
+                ->setProfilePicture(is_string($picture) && strlen($picture) <= 255 ? $picture : null);
+            $em->persist($user);
+        } elseif ($user->getGoogleId() !== null && $user->getGoogleId() !== $claims['sub']) {
+            return $this->json($this->error('Cet email est déjà lié à un autre compte Google.'), 409);
+        }
+        // Email vérifié par Google : le compte existant est lié à ce compte Google
+        $user->setGoogleId($claims['sub']);
+        $em->flush();
+
+        // Même réponse que /api/auth/login (jeton, jeton de renouvellement, utilisateur)
+        $response = $success->handleAuthenticationSuccess($user);
+        $body = json_decode((string) $response->getContent(), true) + ['isNewUser' => $isNew];
+
+        return $this->json($body, $isNew ? 201 : 200);
     }
 
     #[Route('/me', name: 'me', methods: ['GET'])]

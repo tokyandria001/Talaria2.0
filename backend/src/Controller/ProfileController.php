@@ -199,11 +199,14 @@ class ProfileController extends AbstractController
         $me   = $this->getUser();
         $data = json_decode($request->getContent(), true) ?? [];
 
-        if (empty($data['password'])) {
-            return $this->json(['message' => 'Mot de passe requis pour confirmer la suppression.'], 400);
-        }
-        if (!$hasher->isPasswordValid($me, $data['password'])) {
-            return $this->json(['message' => 'Mot de passe incorrect.'], 401);
+        // Compte Google sans mot de passe : la session en cours suffit
+        if ($me->hasPassword()) {
+            if (empty($data['password'])) {
+                return $this->json(['message' => 'Mot de passe requis pour confirmer la suppression.'], 400);
+            }
+            if (!$hasher->isPasswordValid($me, $data['password'])) {
+                return $this->json(['message' => 'Mot de passe incorrect.'], 401);
+            }
         }
 
         if (!$me->getDeletionRequestedAt()) {
@@ -307,11 +310,12 @@ class ProfileController extends AbstractController
         $user = $this->getUser();
         $data = json_decode($request->getContent(), true) ?? [];
 
-        if (empty($data['currentPassword']) || empty($data['newPassword'])) {
+        // Compte Google sans mot de passe : il en choisit un, sans mot de passe actuel
+        if (empty($data['newPassword']) || ($user->hasPassword() && empty($data['currentPassword']))) {
             return $this->json(['message' => 'Mot de passe actuel et nouveau requis.'], 400);
         }
 
-        if (!$hasher->isPasswordValid($user, $data['currentPassword'])) {
+        if ($user->hasPassword() && !$hasher->isPasswordValid($user, $data['currentPassword'])) {
             return $this->json(['message' => 'Mot de passe actuel incorrect.'], 401);
         }
 

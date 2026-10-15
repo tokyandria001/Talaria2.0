@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Colors } from '../constants/Colors';
+import { useAuth } from '../context/AuthContext';
+import { googleAvailable } from '../api/google';
 
 /* Composants partagés des écrans d'accueil / connexion / inscription (design Figma « Auth ») */
 
@@ -18,19 +21,49 @@ const SOCIAL = {
  * Bouton « Se connecter avec Google / Apple ».
  * variant : 'glass' (sur photo), 'parme' (connexion), 'soft' (inscription)
  */
-export function SocialButton({ provider, label, variant = 'glass' }) {
+export function SocialButton({ provider, label, variant = 'glass', onPress, loading }) {
+  if (provider === 'google' && !onPress) return <GoogleButton label={label} variant={variant} />;
   const p = SOCIAL[provider];
   const onParme = variant === 'parme';
   return (
     <TouchableOpacity
-      style={[s.social, s[`social_${variant}`]]}
+      style={[s.social, s[`social_${variant}`], loading && { opacity: 0.6 }]}
       activeOpacity={0.85}
-      onPress={() => comingSoon(`La connexion avec ${p.name}`)}
+      disabled={loading}
+      onPress={onPress ?? (() => comingSoon(`La connexion avec ${p.name}`))}
     >
-      <Ionicons name={p.icon} size={18} color={onParme ? Colors.white : p.color} />
+      {loading
+        ? <ActivityIndicator size="small" color={onParme ? Colors.white : p.color} />
+        : <Ionicons name={p.icon} size={18} color={onParme ? Colors.white : p.color} />}
       <Text style={[s.socialLabel, onParme && { color: Colors.white }]}>{label}</Text>
     </TouchableOpacity>
   );
+}
+
+/** « Continuer avec Google » : connexion, ou inscription suivie de l'onboarding */
+function GoogleButton({ label, variant }) {
+  const router = useRouter();
+  const { loginWithGoogle } = useAuth();
+  const [loading, setLoading] = useState(false);
+
+  const onPress = async () => {
+    if (!googleAvailable) {
+      Alert.alert('Mise à jour nécessaire', 'Installe la dernière version de Talaria pour te connecter avec Google.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await loginWithGoogle();
+      if (result) router.replace(result.isNewUser ? '/profile-setup' : '/(tabs)/home');
+    } catch (err) {
+      Alert.alert('Connexion Google impossible', err.response?.data?.message
+        ?? (err.response ? 'Réessaie dans un instant.' : err.message === 'Network Error' ? 'Impossible de joindre le serveur.' : err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return <SocialButton provider="google" label={label} variant={variant} onPress={onPress} loading={loading} />;
 }
 
 /** Champ avec libellé ; `secure` ajoute l'icône œil pour afficher le mot de passe */

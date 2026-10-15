@@ -55,6 +55,8 @@ export default function AccountScreen() {
   };
 
   const changed = since(user?.passwordChangedAt);
+  // Compte créé avec Google : pas de mot de passe à saisir pour supprimer le compte
+  const hasPassword = user?.hasPassword !== false;
 
   return (
     <SettingsPage title="Compte">
@@ -62,12 +64,14 @@ export default function AccountScreen() {
         <Row icon="mail-outline" title="E-mail" subtitle={user?.email} onPress={() => comingSoon("Le changement d'adresse e-mail")} />
         <Row icon="phone-portrait-outline" title="Téléphone" subtitle={user?.phone || 'Ajouter un numéro'}
           onPress={() => { setPhone(user?.phone ?? ''); setPhoneOpen(true); }} />
-        <Row icon="key-outline" title="Mot de passe" subtitle={changed ? `Modifié ${changed}` : 'Modifier le mot de passe'}
+        <Row icon="key-outline" title="Mot de passe" subtitle={!hasPassword ? 'Créer un mot de passe' : changed ? `Modifié ${changed}` : 'Modifier le mot de passe'}
           onPress={() => router.push('/settings/password')} />
       </Section>
 
       <Section title="Comptes liés">
-        <Row icon="logo-google" title="Google" soon />
+        {user?.googleLinked
+          ? <Row icon="logo-google" title="Google" subtitle="Compte lié : tu peux te connecter avec Google" />
+          : <Row icon="logo-google" title="Google" subtitle="Utilise « Continuer avec Google » à la connexion pour le lier" />}
         <Row icon="logo-apple" title="Apple" soon />
       </Section>
 
@@ -94,8 +98,8 @@ export default function AccountScreen() {
       </BottomSheet>
 
       <BottomSheet visible={deleteOpen} title="Supprimer mon compte" onClose={() => setDeleteOpen(false)} footer={(
-        <TouchableOpacity style={[ss.primaryBtn, { backgroundColor: Colors.error }, (busy || !password) && { opacity: 0.6 }]}
-          onPress={requestDeletion} disabled={busy || !password}>
+        <TouchableOpacity style={[ss.primaryBtn, { backgroundColor: Colors.error }, (busy || (hasPassword && !password)) && { opacity: 0.6 }]}
+          onPress={requestDeletion} disabled={busy || (hasPassword && !password)}>
           <Text style={ss.primaryText}>Supprimer dans 30 jours</Text>
         </TouchableOpacity>
       )}>
@@ -103,9 +107,13 @@ export default function AccountScreen() {
           Ton compte, tes voyages, tes articles et tes messages seront supprimés définitivement dans 30 jours.
           Te reconnecter d'ici là annule la suppression.
         </Text>
-        <Label>Mot de passe</Label>
-        <TextInput style={ss.input} secureTextEntry placeholder="••••••••" placeholderTextColor="#b9aeb5"
-          value={password} onChangeText={setPassword} />
+        {hasPassword && (
+          <>
+            <Label>Mot de passe</Label>
+            <TextInput style={ss.input} secureTextEntry placeholder="••••••••" placeholderTextColor="#b9aeb5"
+              value={password} onChangeText={setPassword} />
+          </>
+        )}
       </BottomSheet>
     </SettingsPage>
   );

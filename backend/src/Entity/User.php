@@ -71,8 +71,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column]
     private array $roles = [];
 
-    #[ORM\Column]
+    /** Empreinte du mot de passe ; null pour un compte créé avec Google (pas de mot de passe) */
+    #[ORM\Column(nullable: true)]
     private ?string $password = null;
+
+    /** Identifiant du compte Google lié (« sub » du jeton Google) */
+    #[ORM\Column(length: 64, unique: true, nullable: true)]
+    private ?string $googleId = null;
 
     #[ORM\Column(length: 100, nullable: true)]
     #[Assert\Length(max: 100)]
@@ -243,6 +248,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getPassword(): ?string { return $this->password; }
     public function setPassword(string $password): static { $this->password = $password; return $this; }
+    public function hasPassword(): bool { return $this->password !== null; }
+
+    public function getGoogleId(): ?string { return $this->googleId; }
+    public function setGoogleId(?string $googleId): static { $this->googleId = $googleId; return $this; }
 
     public function eraseCredentials(): void {}
 

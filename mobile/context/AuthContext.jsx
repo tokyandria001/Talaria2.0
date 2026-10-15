@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 import client, { saveTokens, clearTokens, setSessionExpiredHandler, TOKEN_KEY, REFRESH_KEY } from '../api/client';
+import { getGoogleIdToken, googleSignOut } from '../api/google';
 
 const AuthContext = createContext(null);
 
@@ -57,6 +58,22 @@ export function AuthProvider({ children }) {
     }
   };
 
+  /**
+   * Connexion ou inscription avec Google. Renvoie null si l'utilisateur annule,
+   * sinon { isNewUser } (nouveau compte : l'onboarding suit).
+   */
+  const loginWithGoogle = async () => {
+    const idToken = await getGoogleIdToken();
+    if (!idToken) return null;
+    const { data } = await client.post('/api/auth/google', { idToken });
+    await saveTokens(data);
+    await fetchMe();
+    if (data.deletionCanceled) {
+      Alert.alert('Bon retour !', 'La suppression de ton compte a été annulée.');
+    }
+    return { isNewUser: !!data.isNewUser };
+  };
+
   const register = async (payload) => {
     await client.post('/api/auth/register', payload);
     await login(payload.email, payload.password);
@@ -74,11 +91,12 @@ export function AuthProvider({ children }) {
     const refreshToken = await SecureStore.getItemAsync(REFRESH_KEY);
     if (refreshToken) client.post('/api/token/revoke', { refresh_token: refreshToken }).catch(() => {});
     await clearTokens();
+    googleSignOut();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile, refreshUser: fetchMe }}>
+    <AuthContext.Provider value={{ user, loading, login, loginWithGoogle, register, logout, updateProfile, refreshUser: fetchMe }}>
       {children}
     </AuthContext.Provider>
   );

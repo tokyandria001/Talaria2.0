@@ -56,7 +56,13 @@
           "microphonePermission": false
         }
       ],
-      "@maplibre/maplibre-react-native"
+      "@maplibre/maplibre-react-native",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.688722692928-dn8e3melnk939itijm8r1e7maoh95j4g"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false
