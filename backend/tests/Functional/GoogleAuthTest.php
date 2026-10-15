@@ -8,7 +8,7 @@ use App\Tests\Mock\PhotonMockResponseFactory;
 /** Connexion et inscription avec Google : jetons signés par une clé de test, servie comme certificat Google */
 final class GoogleAuthTest extends ApiTestCase
 {
-    private const CLIENT_ID = '688722692928-dn8e3melnk939itijm8r1e7maoh95j4g.apps.googleusercontent.com';
+    private const CLIENT_ID = '688722692928-1mpg3vmrvffidukrgfas83b2bhp6m0ei.apps.googleusercontent.com';
 
     private \OpenSSLAsymmetricKey $key;
     private string $kid;

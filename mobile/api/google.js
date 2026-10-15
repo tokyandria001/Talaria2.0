@@ -5,7 +5,7 @@
  */
 
 // ID client OAuth « Web » : le jeton Google lui est destiné, le serveur vérifie le même (public, pas un secret)
-const WEB_CLIENT_ID = '688722692928-dn8e3melnk939itijm8r1e7maoh95j4g.apps.googleusercontent.com';
+const WEB_CLIENT_ID = '688722692928-1mpg3vmrvffidukrgfas83b2bhp6m0ei.apps.googleusercontent.com';
 
 let mod = null;
 try {
