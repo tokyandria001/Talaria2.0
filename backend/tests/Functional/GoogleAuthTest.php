@@ -63,6 +63,7 @@ final class GoogleAuthTest extends ApiTestCase
         [, $me] = $this->json('GET', '/api/auth/me', null, $data['token']);
         self::assertSame('lea@gmail.com', $me['user']['email']);
         self::assertSame('Martin', $me['user']['lastName']);
+        self::assertSame('lea', $me['user']['username'], 'Pseudo attribué dès la création (code de parrainage)');
         self::assertSame('https://lh3.googleusercontent.com/a/photo', $me['user']['profilePicture']);
         self::assertFalse($me['user']['hasPassword']);
         self::assertTrue($me['user']['googleLinked']);

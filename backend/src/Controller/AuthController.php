@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Service\GoogleTokenVerifier;
 use App\Service\Referrals;
 use App\Service\UserPresenter;
+use App\Service\UsernameSuggester;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Security\Http\Authentication\AuthenticationSuccessHandler;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -27,6 +28,7 @@ class AuthController extends AbstractController
         ValidatorInterface $validator,
         RateLimiterFactory $registrationLimiter,
         Referrals $referrals,
+        UsernameSuggester $usernames,
     ): JsonResponse {
         // Anti-création de comptes en masse : 5 inscriptions par heure et par IP
         $limit = $registrationLimiter->create($request->getClientIp() ?? 'unknown')->consume();
@@ -58,6 +60,8 @@ class AuthController extends AbstractController
         $user->setLastName($data['lastName'] ?? null);
         // Pseudo facultatif (champ "username" du site web)
         $user->setPseudo(!empty($data['username']) ? trim((string) $data['username']) : null);
+        // Sans pseudo choisi : un pseudo libre d'après le prénom ou l'email (il sert de code de parrainage)
+        $usernames->ensure($user);
         $user->setPassword($hasher->hashPassword($user, $data['password']));
         // Lien d'invitation (?invite=<pseudo du parrain>) : facultatif, ignoré s'il ne correspond à personne
         $referrals->apply($user, $data['invite'] ?? null);
@@ -93,6 +97,7 @@ class AuthController extends AbstractController
         RateLimiterFactory $registrationLimiter,
         AuthenticationSuccessHandler $success,
         Referrals $referrals,
+        UsernameSuggester $usernames,
     ): JsonResponse {
         $data = json_decode($request->getContent(), true) ?? [];
         $idToken = is_string($data['idToken'] ?? null) ? $data['idToken'] : '';
@@ -123,6 +128,7 @@ class AuthController extends AbstractController
                 ->setLastName(isset($claims['family_name']) ? mb_substr($claims['family_name'], 0, 100) : null)
                 ->setProfilePicture(is_string($picture) && strlen($picture) <= 255 ? $picture : null);
             $referrals->apply($user, $data['invite'] ?? null);
+            $usernames->ensure($user);
             $em->persist($user);
         } elseif ($user->getGoogleId() !== null && $user->getGoogleId() !== $claims['sub']) {
             return $this->json($this->error('Cet email est déjà lié à un autre compte Google.'), 409);

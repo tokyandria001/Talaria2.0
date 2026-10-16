@@ -14,6 +14,7 @@ use App\Entity\User;
 use App\Service\Blocking;
 use App\Service\ImageUploader;
 use App\Service\Referrals;
+use App\Service\UsernameSuggester;
 use App\Service\SessionTokens;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
@@ -22,7 +23,6 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Component\String\Slugger\AsciiSlugger;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route('/api/profile', name: 'profile_')]
@@ -51,6 +51,7 @@ class ProfileController extends AbstractController
         Request $request,
         EntityManagerInterface $em,
         ValidatorInterface $validator,
+        UsernameSuggester $usernames,
     ): JsonResponse {
         /** @var User $user */
         $user = $this->getUser();
@@ -108,8 +109,10 @@ class ProfileController extends AbstractController
         }
         if (!empty($data['completeOnboarding'])) {
             $user->setOnboardedAt($user->getOnboardedAt() ?? new \DateTimeImmutable());
-            // Pas de pseudo choisi : on en propose un à partir du prénom (modifiable dans le profil)
-            if (!$user->getPseudo() && $user->getFirstName()) $user->setPseudo($this->suggestUsername($user->getFirstName()));
+            // Pseudo pas encore choisi (aucun, ou celui tiré de l'email à l'inscription) : un pseudo sur le prénom
+            if ($user->getFirstName() && (!$user->getPseudo() || $usernames->isFromEmail($user))) {
+                $user->setPseudo($usernames->suggest($user->getFirstName(), $user));
+            }
         }
 
         $errors = $validator->validate($user);
@@ -348,20 +351,6 @@ class ProfileController extends AbstractController
         $sessions->revokeAll($user);
 
         return $this->json(['message' => 'Mot de passe modifié avec succès.'] + $sessions->issue($user));
-    }
-
-    /** Pseudo libre construit sur le prénom : « alec », sinon « alec.42 »... */
-    private function suggestUsername(string $firstName): string
-    {
-        $base = strtolower((string) (new AsciiSlugger())->slug($firstName, '.'));
-        $base = substr(preg_replace('/[^a-z0-9.]/', '', $base) ?: 'voyageur', 0, 40);
-        if (strlen($base) < 3) $base .= '.voyage';
-        $repo = $this->em->getRepository(User::class);
-        $candidate = $base;
-        for ($i = 0; $repo->findOneBy(['username' => $candidate]) && $i < 20; $i++) {
-            $candidate = $base . '.' . random_int(10, $i < 10 ? 99 : 9999);
-        }
-        return $candidate;
     }
 
     private function serializeUser(User $user): array
