@@ -7,6 +7,7 @@ use App\Service\GoogleTokenVerifier;
 use App\Service\Referrals;
 use App\Service\UserPresenter;
 use App\Service\UsernameSuggester;
+use App\Service\Webhooks;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Security\Http\Authentication\AuthenticationSuccessHandler;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -29,6 +30,7 @@ class AuthController extends AbstractController
         RateLimiterFactory $registrationLimiter,
         Referrals $referrals,
         UsernameSuggester $usernames,
+        Webhooks $webhooks,
     ): JsonResponse {
         // Anti-création de comptes en masse : 5 inscriptions par heure et par IP
         $limit = $registrationLimiter->create($request->getClientIp() ?? 'unknown')->consume();
@@ -77,6 +79,7 @@ class AuthController extends AbstractController
 
         $em->persist($user);
         $em->flush();
+        $webhooks->userRegistered($user, 'email');
 
         return $this->json([
             'message' => 'Compte créé avec succès.',
@@ -98,6 +101,7 @@ class AuthController extends AbstractController
         AuthenticationSuccessHandler $success,
         Referrals $referrals,
         UsernameSuggester $usernames,
+        Webhooks $webhooks,
     ): JsonResponse {
         $data = json_decode($request->getContent(), true) ?? [];
         $idToken = is_string($data['idToken'] ?? null) ? $data['idToken'] : '';
@@ -136,6 +140,7 @@ class AuthController extends AbstractController
         // Email vérifié par Google : le compte existant est lié à ce compte Google
         $user->setGoogleId($claims['sub']);
         $em->flush();
+        if ($isNew) $webhooks->userRegistered($user, 'google');
 
         // Même réponse que /api/auth/login (jeton, jeton de renouvellement, utilisateur)
         $response = $success->handleAuthenticationSuccess($user);

@@ -16,12 +16,27 @@ final class PhotonMockResponseFactory
     /** Certificats publics renvoyés pour la connexion Google (kid => certificat PEM), fixés par le test */
     public static array $googleCerts = [];
 
+    /**
+     * Webhooks reçus pendant les tests : [en-têtes (noms en minuscules), corps JSON]
+     * @var list<array{0: array<string, string>, 1: string}>
+     */
+    public static array $webhooks = [];
+
     public function __invoke(string $method, string $url, array $options = []): ResponseInterface
     {
         self::$calls++;
         parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
         if (($query['q'] ?? '') === 'panne' || str_contains($url, '0.00000,0.00000')) {
             return new MockResponse('', ['http_code' => 503]);
+        }
+        if (str_starts_with($url, 'https://hooks.talaria.test/')) {
+            $headers = [];
+            foreach ($options['headers'] ?? [] as $h) {
+                [$k, $v] = explode(': ', $h, 2);
+                $headers[strtolower($k)] = $v;
+            }
+            self::$webhooks[] = [$headers, $options['body'] ?? ''];
+            return new MockResponse('', ['http_code' => 204]);
         }
         if (str_contains($url, 'googleapis.com/oauth2/v1/certs')) {
             return new MockResponse(json_encode(self::$googleCerts));
