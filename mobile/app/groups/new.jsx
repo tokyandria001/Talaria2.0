@@ -127,7 +127,7 @@ export default function GroupFormScreen() {
             </>
           )}
 
-          <ToggleRow title="Groupe privé" subtitle="Seul l'organisateur peut inviter et partager le lien"
+          <ToggleRow title="Groupe privé" subtitle="Seule la personne qui organise peut inviter et partager le lien"
             value={form.isPrivate} onChange={set('isPrivate')} />
           <ToggleRow title="Budget partagé" subtitle="Suivre les dépenses et les remboursements"
             value={form.sharedBudget} onChange={set('sharedBudget')} />

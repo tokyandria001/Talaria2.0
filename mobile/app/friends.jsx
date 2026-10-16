@@ -111,7 +111,7 @@ export default function FriendsScreen() {
                 <Text style={s.pillBtnText}>Refuser</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[s.pillBtn, s.pillBtnPrimary]}
-                onPress={() => act(() => client.post(`/api/friends/requests/${item.id}/accept`), `Vous êtes maintenant ami avec ${item.user.displayName}.`)}>
+                onPress={() => act(() => client.post(`/api/friends/requests/${item.id}/accept`), `${item.user.displayName} fait maintenant partie de vos amis.`)}>
                 <Text style={[s.pillBtnText, { color: Colors.white }]}>Accepter</Text>
               </TouchableOpacity>
             </UserRow>

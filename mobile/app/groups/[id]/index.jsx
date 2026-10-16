@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../../../api/client';
 import { useAuth } from '../../../context/AuthContext';
+import { accord } from '../../../constants/Gender';
 import GroupHero from '../../../components/groups/GroupHero';
 import FriendPickerSheet from '../../../components/groups/FriendPickerSheet';
 import { shareInvite } from '../../../components/groups/shareInvite';
@@ -44,7 +45,7 @@ export default function GroupScreen() {
     if (!users.length) return;
     try {
       setGroup((await client.post(`/api/groups/${id}/members`, { userIds: users.map(u => u.id) })).data);
-      Alert.alert('Invitations envoyées', `${users.length} ami${users.length > 1 ? 's' : ''} invité${users.length > 1 ? 's' : ''}.`);
+      Alert.alert('Invitations envoyées', `Invitation envoyée à ${users.length} ami${users.length > 1 ? 's' : ''}.`);
     } catch (err) { Alert.alert('Erreur', err.response?.data?.message || "Impossible d'inviter."); }
   };
 
@@ -87,7 +88,7 @@ export default function GroupScreen() {
       >
         {invited && (
           <View style={s.inviteBox}>
-            <Text style={s.inviteText}>Vous êtes invité à rejoindre ce groupe.</Text>
+            <Text style={s.inviteText}>{accord(user, 'Vous êtes invitée à rejoindre ce groupe.', 'Vous êtes invité à rejoindre ce groupe.', 'Une invitation vous attend pour rejoindre ce groupe.')}</Text>
             <View style={s.inviteActions}>
               <TouchableOpacity style={[s.smallBtn, s.smallBtnOutline]} onPress={() => respond(false)}>
                 <Text style={[s.smallBtnText, { color: Colors.white }]}>Refuser</Text>

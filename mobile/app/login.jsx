@@ -52,7 +52,7 @@ export default function LoginScreen() {
             <AuthHeader title="Connexion" onBack={() => router.back()} />
 
             <Animated.View style={{ flex: 1, justifyContent: 'center', opacity, transform: [{ translateY }] }}>
-              <Text style={s.intro}>Ravi de vous revoir ! Prêt pour de{'\n'}nouveaux voyages malins ?</Text>
+              <Text style={s.intro}>Bon retour parmi nous ! On prépare de{'\n'}nouveaux voyages malins ?</Text>
 
               <View style={{ gap: 12 }}>
                 <SocialButton provider="google" label="Se connecter avec Google" variant="parme" />

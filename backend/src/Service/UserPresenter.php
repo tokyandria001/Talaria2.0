@@ -55,6 +55,7 @@ final class UserPresenter
             'createdAt'         => $u->getCreatedAt()?->format(\DateTimeInterface::ATOM),
             // Onboarding (l'âge reste privé : seulement dans le profil de l'utilisateur lui-même)
             'birthYear'         => $u->getBirthYear(),
+            'gender'            => $u->getGender(),
             'homeCity'          => $u->getHomeCity(),
             'homeLatitude'      => $u->getHomeLatitude(),
             'homeLongitude'     => $u->getHomeLongitude(),

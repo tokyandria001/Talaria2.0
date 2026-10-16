@@ -28,6 +28,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /** Onboarding : styles de voyageur (3 au plus) et avec qui l'on part le plus souvent */
     public const TRAVELER_TYPES = ['aventurier', 'foodie', 'culture', 'nature', 'fetard', 'romantique'];
     public const COMPANIONS = ['amis', 'couple', 'famille', 'solo'];
+    /** Accord des textes qui s'adressent à la personne ; null = formulations neutres */
+    public const GENDERS = ['feminin', 'masculin'];
     /** Style de voyageur → centre d'intérêt utilisé pour remplir le planning */
     public const TRAVELER_TYPE_TAGS = [
         'aventurier' => 'aventure', 'foodie' => 'gastronomie', 'culture' => 'culture',
@@ -208,6 +210,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Assert\Range(min: 0, max: 100000, notInRangeMessage: 'Budget invalide.')]
     private ?int $weekendBudget = null;
 
+    /** « Elle » / « Il » (GENDERS) pour accorder les textes ; null = neutre. Jamais montré aux autres */
+    #[ORM\Column(length: 10, nullable: true)]
+    #[Assert\Choice(choices: self::GENDERS, message: 'Choix invalide.')]
+    private ?string $gender = null;
+
     /** Avec qui l'on part le plus souvent (COMPANIONS) */
     #[ORM\Column(length: 20, nullable: true)]
     #[Assert\Choice(choices: self::COMPANIONS, message: 'Choix invalide.')]
@@ -309,6 +316,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setTravelerTypes(array $types): static { $this->travelerTypes = $types; return $this; }
     public function getWeekendBudget(): ?int { return $this->weekendBudget; }
     public function setWeekendBudget(?int $budget): static { $this->weekendBudget = $budget; return $this; }
+    public function getGender(): ?string { return $this->gender; }
+    public function setGender(?string $gender): static { $this->gender = $gender; return $this; }
     public function getCompanions(): ?string { return $this->companions; }
     public function setCompanions(?string $companions): static { $this->companions = $companions; return $this; }
     public function getWishlist(): array { return $this->wishlist ?? []; }

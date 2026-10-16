@@ -9,6 +9,7 @@ import UserAvatar from '../components/UserAvatar';
 import { SettingsPage, Section, SwitchRow, Chips, Label, settingsStyles as ss } from '../components/settings/SettingsUI';
 import { ACTIVITY_TAGS } from '../constants/Preferences';
 import { Colors } from '../constants/Colors';
+import { GENDERS, genderPayload } from '../constants/Gender';
 
 const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,50}$/;
 const INTERESTS = ACTIVITY_TAGS.map(t => ({ value: t.value, label: t.label.replace(/^\S+\s/, '') }));
@@ -20,6 +21,7 @@ export default function EditProfileScreen() {
   const [form, setForm] = useState({
     name:     [user?.firstName, user?.lastName].filter(Boolean).join(' '),
     username: user?.username ?? '',
+    gender:   user?.gender ?? 'neutre',
     bio:      user?.bio ?? '',
     activityTags: user?.activityTags ?? [],
     averageBudget: user?.averageBudget != null ? String(user.averageBudget) : '',
@@ -56,7 +58,7 @@ export default function EditProfileScreen() {
     setSaving(true);
     try {
       await updateProfile({
-        firstName, lastName: rest.join(' '), username,
+        firstName, lastName: rest.join(' '), username, gender: genderPayload(form.gender),
         bio: form.bio.trim() || null,
         activityTags: form.activityTags,
         averageBudget: form.averageBudget === '' ? null : parseInt(form.averageBudget, 10),
@@ -90,6 +92,10 @@ export default function EditProfileScreen() {
       <Label>Pseudo</Label>
       <TextInput style={ss.input} placeholder="@aleclamalice" placeholderTextColor="#b9aeb5" autoCapitalize="none"
         value={form.username ? `@${form.username.replace(/^@/, '')}` : ''} onChangeText={(v) => set('username')(v.replace(/^@/, ''))} />
+
+      <Label>Comment s'adresser à toi ?</Label>
+      <Chips single options={GENDERS} selected={form.gender} onChange={set('gender')} />
+      <Text style={ss.note}>Pour accorder les textes de l'app. Jamais montré aux autres.</Text>
 
       <Label>Bio</Label>
       <TextInput style={[ss.input, s.bio]} multiline maxLength={500} placeholderTextColor="#b9aeb5"

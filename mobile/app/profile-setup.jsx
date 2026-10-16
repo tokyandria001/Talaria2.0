@@ -14,6 +14,7 @@ import PlaceAutocomplete from '../components/PlaceAutocomplete';
 import UserAvatar from '../components/UserAvatar';
 import { ValueSlider } from '../components/settings/SettingsUI';
 import { Colors } from '../constants/Colors';
+import { GENDERS, accord, genderPayload } from '../constants/Gender';
 import { skipKey } from '../constants/Preferences';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -22,14 +23,17 @@ const DONE = QUESTIONS + 1;              // étapes : 0 bienvenue, 1 à 7 questi
 const YEAR = new Date().getFullYear();
 const MIN_AGE = 13, MAX_AGE = 99, TICK = 14;
 
+// Libellé neutre, au féminin (f) et au masculin (m) : voir typeLabel()
 const TYPES = [
-  { value: 'aventurier', label: 'Aventurier', sub: 'Rando, sensations',   icon: 'compass-outline' },
+  { value: 'aventurier', label: 'Aventure', f: 'Aventurière', m: 'Aventurier', sub: 'Rando, sensations', icon: 'compass-outline' },
   { value: 'foodie',     label: 'Foodie',     sub: 'Street-food, marchés', icon: 'star-outline' },
   { value: 'culture',    label: 'Culture',    sub: 'Musées, histoire',    icon: 'globe-outline' },
   { value: 'nature',     label: 'Nature',     sub: 'Parcs, plages',       icon: 'leaf-outline' },
-  { value: 'fetard',     label: 'Fêtard',     sub: 'Bars, festivals',     icon: 'calendar-outline' },
+  { value: 'fetard',     label: 'Fête',       f: 'Fêtarde', m: 'Fêtard', sub: 'Bars, festivals',     icon: 'calendar-outline' },
   { value: 'romantique', label: 'Romantique', sub: 'Couchers de soleil',  icon: 'heart-outline' },
 ];
+const typeLabel = (t, gender) => accord({ gender }, t.f ?? t.label, t.m ?? t.label, t.label);
+
 // Titre du profil voyageur : nom du 1er style + qualificatif du 2e (mots valables au masculin comme au féminin)
 const TYPE_NOUN = { aventurier: 'Globe-trotter', foodie: 'Gourmet', culture: 'Esthète', nature: 'Âme sauvage', fetard: 'Noctambule', romantique: 'Romantique' };
 const TYPE_ADJ  = { aventurier: 'intrépide', foodie: 'gourmet', culture: 'esthète', nature: 'nature', fetard: 'noctambule', romantique: 'romantique' };
@@ -87,6 +91,7 @@ export default function ProfileSetupScreen() {
   const [saving, setSaving] = useState(false);
   const [f, setF] = useState(() => ({
     firstName: user?.firstName ?? '',
+    gender: user?.gender ?? 'neutre',
     age: user?.birthYear ? YEAR - user.birthYear : 24,
     ageTouched: !!user?.birthYear,
     homeCity: user?.homeCity ?? '',
@@ -120,7 +125,7 @@ export default function ProfileSetupScreen() {
   /** Réponses de l'étape courante (null : rien à enregistrer) */
   const payloadFor = (s) => {
     switch (s) {
-      case 1: return f.firstName.trim() ? { firstName: f.firstName.trim() } : null;
+      case 1: return f.firstName.trim() ? { firstName: f.firstName.trim(), gender: genderPayload(f.gender) } : null;
       case 2: return f.ageTouched ? { birthYear: YEAR - f.age } : null;
       case 3: return f.homeCity.trim() ? {
         homeCity: f.homeCity.trim(), homeLatitude: f.homePlace?.latitude ?? null, homeLongitude: f.homePlace?.longitude ?? null, homeHubs: f.homeHubs,
@@ -203,7 +208,7 @@ export default function ProfileSetupScreen() {
             {step === 1 && <NameStep f={f} set={set} user={user} refreshUser={refreshUser} />}
             {step === 2 && <AgeStep age={f.age} onChange={(age) => setF(p => ({ ...p, age, ageTouched: true }))} />}
             {step === 3 && <CityStep f={f} setF={setF} />}
-            {step === 4 && <StyleStep value={f.travelerTypes} onChange={set('travelerTypes')} />}
+            {step === 4 && <StyleStep value={f.travelerTypes} onChange={set('travelerTypes')} gender={f.gender} />}
             {step === 5 && <BudgetStep value={f.weekendBudget} onChange={set('weekendBudget')} />}
             {step === 6 && <CompanionsStep value={f.companions} onChange={set('companions')} />}
             {step === 7 && <SwipeStep wishlist={f.wishlist} onChange={set('wishlist')} onFinished={() => next()} />}
@@ -309,6 +314,16 @@ function NameStep({ f, set, user, refreshUser }) {
         placeholderTextColor="#cdbfc8" autoCapitalize="words" autoComplete="given-name" maxLength={40} returnKeyType="done" />
       <View style={s.nameLine} />
       <View style={s.note}><Ionicons name="information-circle-outline" size={13} color={Colors.parme} /><Text style={s.noteText}>Tu pourras le modifier dans ton profil</Text></View>
+
+      <Text style={s.genderTitle}>Comment s'adresser à toi ?</Text>
+      <View style={s.genderRow}>
+        {GENDERS.map(g => (
+          <TouchableOpacity key={g.value} style={[s.genderChip, f.gender === g.value && s.genderChipOn]}
+            onPress={() => set('gender')(g.value)} activeOpacity={0.85}>
+            <Text style={[s.genderText, f.gender === g.value && { color: Colors.white }]}>{g.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </ScrollView>
   );
 }
@@ -409,14 +424,15 @@ function CityStep({ f, setF }) {
 }
 
 /* ── 04 · Style de voyageur (3 au plus) ── */
-function StyleStep({ value, onChange }) {
+function StyleStep({ value, onChange, gender }) {
   const toggle = (v) => {
     if (value.includes(v)) onChange(value.filter(x => x !== v));
     else if (value.length < 3) onChange([...value, v]);
   };
   return (
     <ScrollView contentContainerStyle={s.page}>
-      <Question n={4} title="Quel voyageur es-tu ?" subtitle="Choisis jusqu'à 3 styles : on s'en sert pour tes suggestions." />
+      <Question n={4} title={accord({ gender }, 'Quelle voyageuse es-tu ?', 'Quel voyageur es-tu ?', 'Quel style de voyage te ressemble ?')}
+        subtitle="Choisis jusqu'à 3 styles : on s'en sert pour tes suggestions." />
       <View style={s.grid}>
         {TYPES.map((t, i) => {
           const on = value.includes(t.value);
@@ -428,7 +444,7 @@ function StyleStep({ value, onChange }) {
                 <Ionicons name={t.icon} size={17} color={on ? Colors.white : Colors.parme} />
               </View>
               {on && <View style={s.typeCheck}><Ionicons name="checkmark" size={12} color={Colors.parme} /></View>}
-              <Text style={[s.typeLabel, on && { color: Colors.white }]}>{t.label}</Text>
+              <Text style={[s.typeLabel, on && { color: Colors.white }]}>{typeLabel(t, gender)}</Text>
               <Text style={[s.typeSub, on && { color: 'rgba(255,255,255,0.8)' }]}>{t.sub}</Text>
             </TouchableOpacity>
           );
@@ -592,7 +608,7 @@ function ReadyStep({ user, f }) {
         </View>
         <View style={s.readyLine} />
         <View style={s.readyChips}>
-          {types.map(t => <ReadyChip key={t.value} icon={t.icon} label={t.label} light />)}
+          {types.map(t => <ReadyChip key={t.value} icon={t.icon} label={typeLabel(t, f.gender)} light />)}
           <ReadyChip icon="wallet-outline" label={rangeOf(f.weekendBudget).label} />
           {companion && <ReadyChip icon={companion.icon} label={companion.label} light />}
           {user?.homeCity ? <ReadyChip icon="location-outline" label={`Départ ${user.homeCity}`} light /> : null}
@@ -668,6 +684,11 @@ const s = StyleSheet.create({
   nameLine: { height: 2, backgroundColor: Colors.parme, marginHorizontal: 20, borderRadius: 1 },
   note: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', marginTop: 14, backgroundColor: Colors.white, borderRadius: 100, paddingHorizontal: 12, paddingVertical: 6 },
   noteText: { fontFamily: 'BricolageGrotesque_400Regular', fontSize: 11, color: Colors.parme },
+  genderTitle: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 14, color: Colors.text, textAlign: 'center', marginTop: 26, marginBottom: 10 },
+  genderRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
+  genderChip: { backgroundColor: Colors.white, borderRadius: 100, borderWidth: 1.5, borderColor: '#ece3e7', paddingVertical: 8, paddingHorizontal: 14 },
+  genderChipOn: { backgroundColor: Colors.parme, borderColor: Colors.parme },
+  genderText: { fontFamily: 'BricolageGrotesque_600SemiBold', fontSize: 13, color: Colors.parme },
 
   // 02
   ageRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 30 },

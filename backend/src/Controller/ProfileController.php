@@ -102,6 +102,8 @@ class ProfileController extends AbstractController
         }
         if (array_key_exists('weekendBudget', $data)) $user->setWeekendBudget($this->parseInt($data['weekendBudget'], 'budget'));
         if (array_key_exists('companions', $data)) $user->setCompanions($data['companions'] ? (string) $data['companions'] : null);
+        // « Je préfère ne pas dire » : null (textes neutres)
+        if (array_key_exists('gender', $data)) $user->setGender($data['gender'] ? (string) $data['gender'] : null);
         if (isset($data['wishlist']) && is_array($data['wishlist'])) {
             $user->setWishlist(array_slice(array_values(array_unique(array_filter(array_map(
                 fn ($w) => is_string($w) ? mb_substr(trim($w), 0, 60) : '', $data['wishlist']

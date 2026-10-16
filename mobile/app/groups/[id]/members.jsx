@@ -53,7 +53,7 @@ export default function GroupMembersScreen() {
 
   const activeCount = group.members.filter(m => m.status === 'active').length;
   const subtitle = (m) => {
-    if (m.status === 'invited') return `Invité · le ${fmtDay(m.invitedAt)}`;
+    if (m.status === 'invited') return `Invitation envoyée le ${fmtDay(m.invitedAt)}`;
     return m.role === 'owner' ? 'Organisateur' : 'Membre';
   };
 
@@ -100,7 +100,7 @@ export default function GroupMembersScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <Text style={s.note}>Groupe privé : seul l'organisateur peut inviter de nouveaux participants.</Text>
+          <Text style={s.note}>Groupe privé : seule la personne qui organise peut inviter de nouveaux participants.</Text>
         )}
       />
 

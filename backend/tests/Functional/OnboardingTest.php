@@ -23,6 +23,14 @@ final class OnboardingTest extends ApiTestCase
         self::assertSame(200, $code);
         $user = $data['user'];
         self::assertSame('alec', $user['username'], 'Pseudo proposé à partir du prénom');
+
+        // Accord des textes : « Elle », « Il », ou neutre (null) ; rien d'autre n'est accepté
+        [, $data] = $this->json('PATCH', '/api/profile', ['gender' => 'feminin'], $token);
+        self::assertSame('feminin', $data['user']['gender']);
+        [$code] = $this->json('PATCH', '/api/profile', ['gender' => 'autre'], $token);
+        self::assertSame(422, $code);
+        [, $data] = $this->json('PATCH', '/api/profile', ['gender' => null], $token);
+        self::assertNull($data['user']['gender']);
         self::assertSame(2002, $user['birthYear']);
         self::assertSame(['Angers Saint-Laud', 'Aéroport Nantes-Atlantique'], $user['homeHubs']);
         self::assertSame(['aventurier', 'foodie', 'culture'], $user['travelerTypes'], 'Valeurs connues, 3 au plus');
