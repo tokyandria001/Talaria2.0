@@ -30,6 +30,8 @@ final class WebhookTest extends ApiTestCase
         // Signature vérifiable par le destinataire avec le secret partagé
         $expected = 'sha256=' . hash_hmac('sha256', $headers['x-talaria-timestamp'] . '.' . $body, 'secret-de-test');
         self::assertSame($expected, $headers['x-talaria-signature']);
+        // En-tête d'authentification du destinataire (Header Auth de n8n)
+        self::assertSame('jeton-de-test', $headers['x-webhook-token']);
 
         // Connexion ensuite : aucun nouveau webhook
         $this->json('POST', '/api/auth/login', ['username' => 'lea@talaria.test', 'password' => 'motdepasse123']);

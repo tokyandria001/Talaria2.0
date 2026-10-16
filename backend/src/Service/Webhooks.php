@@ -17,6 +17,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  * Envoi après la réponse au client (kernel.terminate) : une panne du service externe ne ralentit
  * ni ne bloque jamais l'inscription. Chaque requête est signée :
  *   X-Talaria-Signature: sha256=<HMAC-SHA256 de "<X-Talaria-Timestamp>.<corps>" avec WEBHOOK_SECRET>
+ * WEBHOOK_AUTH_HEADER (facultatif, « Nom: valeur ») : en-tête exigé par le destinataire (ex. « Header Auth » de n8n).
  */
 final class Webhooks
 {
@@ -28,6 +29,7 @@ final class Webhooks
         private LoggerInterface $logger,
         #[Autowire('%env(default::WEBHOOK_URL)%')] private ?string $url,
         #[Autowire('%env(default::WEBHOOK_SECRET)%')] private ?string $secret,
+        #[Autowire('%env(default::WEBHOOK_AUTH_HEADER)%')] private ?string $authHeader = null,
     ) {}
 
     /** Nouveau compte (inscription par email ou première connexion avec Google) */
@@ -69,6 +71,11 @@ final class Webhooks
             'X-Talaria-Timestamp' => $timestamp,
             'X-Talaria-Signature' => 'sha256=' . hash_hmac('sha256', "$timestamp.$body", (string) $this->secret),
         ];
+        // En-tête d'authentification du destinataire : « Nom: valeur »
+        if ($this->authHeader && str_contains($this->authHeader, ':')) {
+            [$name, $value] = array_map('trim', explode(':', $this->authHeader, 2));
+            if ($name !== '' && $value !== '') $headers[$name] = $value;
+        }
 
         // Deux essais, 5 secondes au plus chacun
         for ($attempt = 1; $attempt <= 2; $attempt++) {
