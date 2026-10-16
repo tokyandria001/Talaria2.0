@@ -42,7 +42,10 @@ final class PhotonMockResponseFactory
             return new MockResponse(json_encode(self::$googleCerts));
         }
         if (str_contains($url, 'router.project-osrm.org')) {
-            return new MockResponse(json_encode(['code' => 'Ok', 'routes' => [['distance' => 465_800, 'duration' => 17_880]]]));
+            return new MockResponse(json_encode(['code' => 'Ok', 'routes' => [[
+                'distance' => 465_800, 'duration' => 17_880,
+                'geometry' => ['type' => 'LineString', 'coordinates' => [[2.352222, 48.856614], [3.5, 47.3], [4.835659, 45.764043]]],
+            ]]]));
         }
         // Gares (dont une station de métro et une gare lointaine, écartées) et aéroports autour d'Angers
         if (($query['osm_tag'] ?? '') === 'railway:station') {

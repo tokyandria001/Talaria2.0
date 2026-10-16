@@ -46,7 +46,11 @@ final class GeoTest extends ApiTestCase
 
         [$code, $route] = $this->json('GET', '/api/geo/route?from=48.8566,2.3522&to=45.7640,' . (4.8357 + mt_rand(1, 999) / 1e6), null, $token);
         self::assertSame(200, $code);
-        self::assertSame(['distanceKm' => 466, 'durationMin' => 298], $route);
+        self::assertSame(466, $route['distanceKm']);
+        self::assertSame(298, $route['durationMin']);
+        // Tracé de la route pour la carte : [lon, lat] arrondis à 5 décimales
+        self::assertSame('LineString', $route['geometry']['type']);
+        self::assertSame([[2.35222, 48.85661], [3.5, 47.3], [4.83566, 45.76404]], $route['geometry']['coordinates']);
 
         [$code] = $this->json('GET', '/api/geo/route?from=nord&to=45,4', null, $token);
         self::assertSame(400, $code);

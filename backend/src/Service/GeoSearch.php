@@ -69,18 +69,21 @@ final class GeoSearch
     }
 
     /**
-     * Itinéraire en voiture entre deux points : distance (km) et durée (min). Gardé en cache 30 jours.
+     * Itinéraire en voiture entre deux points : distance (km), durée (min) et tracé de la route
+     * (GeoJSON LineString, coordonnées [lon, lat] simplifiées par OSRM). Gardé en cache 30 jours.
      *
-     * @return array{distanceKm: int, durationMin: int}
+     * @return array{distanceKm: int, durationMin: int, geometry: array{type: string, coordinates: list<array{0: float, 1: float}>}|null}
      */
     public function route(float $fromLat, float $fromLon, float $toLat, float $toLon): array
     {
         $path = sprintf('%.5f,%.5f;%.5f,%.5f', $fromLon, $fromLat, $toLon, $toLat);
 
-        return $this->cache->get('geo_route_' . md5($path), function (ItemInterface $item) use ($path) {
+        // v2 : réponse avec le tracé (les entrées en cache sans tracé sont ignorées)
+        return $this->cache->get('geo_route_v2_' . md5($path), function (ItemInterface $item) use ($path) {
             $item->expiresAfter(30 * 86400);
             try {
-                $data = $this->httpClient->request('GET', self::ROUTE_URL . $path . '?overview=false', [
+                // overview=simplified : quelques centaines de points, suffisant pour une carte (overview=full en donne des milliers)
+                $data = $this->httpClient->request('GET', self::ROUTE_URL . $path . '?overview=simplified&geometries=geojson', [
                     'headers' => ['User-Agent' => self::USER_AGENT],
                     'timeout' => 8,
                 ])->toArray();
@@ -91,8 +94,38 @@ final class GeoSearch
             $route = $data['routes'][0] ?? null;
             if (($data['code'] ?? '') !== 'Ok' || !$route) throw new GeoSearchUnavailable('Aucun itinéraire');
 
-            return ['distanceKm' => (int) round($route['distance'] / 1000), 'durationMin' => (int) round($route['duration'] / 60)];
+            return [
+                'distanceKm'  => (int) round($route['distance'] / 1000),
+                'durationMin' => (int) round($route['duration'] / 60),
+                'geometry'    => $this->traceRoute($route['geometry'] ?? null),
+            ];
         });
+    }
+
+    /**
+     * Tracé GeoJSON allégé : coordonnées arrondies à 5 décimales (environ 1 m), 2 000 points au plus.
+     *
+     * @return array{type: string, coordinates: list<array{0: float, 1: float}>}|null
+     */
+    private function traceRoute(mixed $geometry): ?array
+    {
+        $coords = is_array($geometry) && ($geometry['type'] ?? '') === 'LineString' && is_array($geometry['coordinates'] ?? null)
+            ? $geometry['coordinates'] : [];
+        $coords = array_values(array_filter($coords, fn ($c) => is_array($c) && count($c) >= 2 && is_numeric($c[0]) && is_numeric($c[1])));
+        if (count($coords) < 2) return null;
+
+        // Trop de points : un sur n, en gardant toujours l'arrivée
+        $step = (int) ceil(count($coords) / 2000);
+        if ($step > 1) {
+            $last = end($coords);
+            $coords = array_values(array_filter($coords, fn ($c, $i) => $i % $step === 0, ARRAY_FILTER_USE_BOTH));
+            if (end($coords) !== $last) $coords[] = $last;
+        }
+
+        return [
+            'type'        => 'LineString',
+            'coordinates' => array_map(fn ($c) => [round((float) $c[0], 5), round((float) $c[1], 5)], $coords),
+        ];
     }
 
     /**
