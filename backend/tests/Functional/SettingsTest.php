@@ -174,6 +174,29 @@ final class SettingsTest extends ApiTestCase
         self::assertSame(401, $code);
     }
 
+    public function testAdminCanDeleteAnAccountRightAway(): void
+    {
+        $this->token('alice');
+        $purge = new CommandTester((new Application(static::$kernel))->find('app:purge-deleted-accounts'));
+
+        // Compte inconnu, ou --now oublié : rien n'est supprimé
+        self::assertSame(1, $purge->execute(['--user' => 'personne@talaria.test', '--now' => true]));
+        self::assertSame(2, $purge->execute(['--user' => 'alice@talaria.test']));
+
+        // Confirmation refusée, puis acceptée
+        $purge->setInputs(['non']);
+        $purge->execute(['--user' => 'alice@talaria.test', '--now' => true]);
+        self::assertStringContainsString('Annulé', $purge->getDisplay());
+        [$code] = $this->json('POST', '/api/auth/login', ['username' => 'alice@talaria.test', 'password' => 'motdepasse123']);
+        self::assertSame(200, $code);
+
+        $purge->setInputs(['oui']);
+        self::assertSame(0, $purge->execute(['--user' => 'alice@talaria.test', '--now' => true]));
+        self::assertStringContainsString('supprimé définitivement', $purge->getDisplay());
+        [$code] = $this->json('POST', '/api/auth/login', ['username' => 'alice@talaria.test', 'password' => 'motdepasse123']);
+        self::assertSame(401, $code, 'Compte supprimé sans attendre 30 jours');
+    }
+
     public function testCoverPhotoCanBeChangedAndRemoved(): void
     {
         $token = $this->token('alice');
