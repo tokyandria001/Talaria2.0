@@ -97,7 +97,7 @@ final class PurgeDeletedAccountsCommand extends Command
             return Command::SUCCESS;
         }
 
-        $question = new ConfirmationQuestion('Supprimer ce compte et toutes ses données maintenant ? (oui/non) ', false, '/^(o|oui|y|yes)$/i');
+        $question = new ConfirmationQuestion('Supprimer ce compte et toutes ses données maintenant ?', false, '/^(o|oui|y|yes)$/i');
         if (!$input->getOption('yes') && !$io->askQuestion($question)) {
             $io->note('Annulé : rien n\'a été supprimé.');
             return Command::SUCCESS;

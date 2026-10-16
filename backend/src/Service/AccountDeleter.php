@@ -5,6 +5,7 @@ namespace App\Service;
 use App\Entity\Article;
 use App\Entity\ArticleLike;
 use App\Entity\Comment;
+use App\Entity\PlaceLike;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -30,6 +31,13 @@ final class AccountDeleter
 
         foreach ($em->getRepository(ArticleLike::class)->findBy(['user' => $user]) as $like) $em->remove($like);
         foreach ($em->getRepository(Comment::class)->findBy(['author' => $user]) as $comment) $em->remove($comment);
+        // Lieux créés : ils restent sur la carte, sans auteur
+        $em->createQuery('UPDATE App\Entity\Place p SET p.createdBy = NULL WHERE p.createdBy = :u')->setParameter('u', $user)->execute();
+        // « J'aime » sur les lieux : retirés, compteur du lieu mis à jour
+        foreach ($em->getRepository(PlaceLike::class)->findBy(['user' => $user]) as $like) {
+            $like->getPlace()->setLikesCount(max(0, $like->getPlace()->getLikesCount() - 1));
+            $em->remove($like);
+        }
         $em->flush();
 
         foreach ($em->getRepository(Article::class)->findBy(['author' => $user]) as $article) {

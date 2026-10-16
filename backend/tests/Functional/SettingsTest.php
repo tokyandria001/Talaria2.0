@@ -197,6 +197,24 @@ final class SettingsTest extends ApiTestCase
         self::assertSame(401, $code, 'Compte supprimé sans attendre 30 jours');
     }
 
+    public function testDeletedAccountKeepsItsPlacesWithoutAuthor(): void
+    {
+        $alice = $this->token('alice');
+        $bob = $this->token('bob');
+        [, $created] = $this->json('POST', '/api/places', ['name' => 'Café de Lucie', 'latitude' => 45.76, 'longitude' => 4.83, 'tags' => ['bar']], $alice);
+        [, $other] = $this->json('POST', '/api/places', ['name' => 'Musée de Bob', 'latitude' => 45.77, 'longitude' => 4.84, 'tags' => ['musee']], $bob);
+        $this->json('POST', "/api/places/{$other['place']['id']}/like", null, $alice);
+
+        $purge = new CommandTester((new Application(static::$kernel))->find('app:purge-deleted-accounts'));
+        self::assertSame(0, $purge->execute(['--user' => 'alice@talaria.test', '--now' => true, '--yes' => true]));
+
+        [$code, $place] = $this->json('GET', "/api/places/{$created['place']['id']}", null, $bob);
+        self::assertSame(200, $code, 'Le lieu reste sur la carte');
+        self::assertNull($place['place']['createdBy'] ?? $place['createdBy'] ?? null, 'Sans auteur');
+        [, $liked] = $this->json('GET', "/api/places/{$other['place']['id']}", null, $bob);
+        self::assertSame(0, $liked['place']['likesCount'] ?? $liked['likesCount'], "Son « j'aime » est retiré");
+    }
+
     public function testCoverPhotoCanBeChangedAndRemoved(): void
     {
         $token = $this->token('alice');

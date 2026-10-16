@@ -71,8 +71,9 @@ class Place
     #[ORM\Column(options: ['default' => 0])]
     private int $likesCount = 0;
 
+    /** Auteur ; vidé si son compte est supprimé (le lieu reste sur la carte) */
     #[ORM\ManyToOne]
-    #[ORM\JoinColumn(nullable: true)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?User $createdBy = null;
 
     #[ORM\Column]
