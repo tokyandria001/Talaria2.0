@@ -73,8 +73,8 @@ final class GeoSearch
 
     /**
      * Itinéraire en voiture, avec des étapes intermédiaires facultatives ($via : liste de [lat, lon]) :
-     * distance (km), durée (min), tracé de la route (GeoJSON LineString, coordonnées [lon, lat] simplifiées
-     * par OSRM) et un tronçon par étape (legs). Gardé en cache 30 jours.
+     * distance (km), durée (min), tracé de la route (GeoJSON LineString, coordonnées [lon, lat] qui suivent
+     * la route à 3 m près) et un tronçon par étape (legs). Gardé en cache 30 jours.
      *
      * @param list<array{0: float, 1: float}> $via
      * @return array{distanceKm: int, durationMin: int, legs: list<array{distanceKm: int, durationMin: int}>, geometry: array{type: string, coordinates: list<array{0: float, 1: float}>}|null}
@@ -84,12 +84,13 @@ final class GeoSearch
         $points = [[$fromLat, $fromLon], ...array_slice($via, 0, self::MAX_VIA), [$toLat, $toLon]];
         $path = implode(';', array_map(fn (array $p) => sprintf('%.5f,%.5f', $p[1], $p[0]), $points));
 
-        // v2 : réponse avec le tracé (les entrées en cache sans tracé sont ignorées)
-        return $this->cache->get('geo_route_v2_' . md5($path), function (ItemInterface $item) use ($path) {
+        // v4 : tracé précis (les entrées en cache plus anciennes, moins précises, sont ignorées)
+        return $this->cache->get('geo_route_v4_' . md5($path), function (ItemInterface $item) use ($path) {
             $item->expiresAfter(30 * 86400);
             try {
-                // overview=simplified : quelques centaines de points, suffisant pour une carte (overview=full en donne des milliers)
-                $data = $this->httpClient->request('GET', self::ROUTE_URL . $path . '?overview=simplified&geometries=geojson', [
+                // overview=full : le tracé suit la route (simplified coupe en ligne droite entre de rares points) ;
+                // il est ensuite allégé par traceRoute() sans perdre la forme des virages
+                $data = $this->httpClient->request('GET', self::ROUTE_URL . $path . '?overview=full&geometries=geojson', [
                     'headers' => ['User-Agent' => self::USER_AGENT],
                     'timeout' => 8,
                 ])->toArray();
@@ -113,8 +114,14 @@ final class GeoSearch
         });
     }
 
+    /** Tracé : écart toléré par rapport à la route (m), et nombre de points au plus */
+    private const TRACE_TOLERANCE_M = 3.0;
+    private const TRACE_MAX_POINTS = 5000;
+
     /**
-     * Tracé GeoJSON allégé : coordonnées arrondies à 5 décimales (environ 1 m), 2 000 points au plus.
+     * Tracé GeoJSON allégé sans perdre la forme de la route : les points des lignes droites sont retirés,
+     * ceux des virages gardés (Douglas-Peucker, 3 m d'écart au plus ; tolérance doublée si le trajet
+     * dépasse 5 000 points). Coordonnées arrondies à 5 décimales (environ 1 m).
      *
      * @return array{type: string, coordinates: list<array{0: float, 1: float}>}|null
      */
@@ -122,21 +129,70 @@ final class GeoSearch
     {
         $coords = is_array($geometry) && ($geometry['type'] ?? '') === 'LineString' && is_array($geometry['coordinates'] ?? null)
             ? $geometry['coordinates'] : [];
-        $coords = array_values(array_filter($coords, fn ($c) => is_array($c) && count($c) >= 2 && is_numeric($c[0]) && is_numeric($c[1])));
+        $coords = array_values(array_map(
+            fn ($c) => [(float) $c[0], (float) $c[1]],
+            array_filter($coords, fn ($c) => is_array($c) && count($c) >= 2 && is_numeric($c[0]) && is_numeric($c[1])),
+        ));
         if (count($coords) < 2) return null;
 
-        // Trop de points : un sur n, en gardant toujours l'arrivée
-        $step = (int) ceil(count($coords) / 2000);
-        if ($step > 1) {
-            $last = end($coords);
-            $coords = array_values(array_filter($coords, fn ($c, $i) => $i % $step === 0, ARRAY_FILTER_USE_BOTH));
-            if (end($coords) !== $last) $coords[] = $last;
+        $tolerance = self::TRACE_TOLERANCE_M;
+        $kept = $this->simplify($coords, $tolerance);
+        while (count($kept) > self::TRACE_MAX_POINTS) {
+            $tolerance *= 2;
+            $kept = $this->simplify($coords, $tolerance);
         }
 
         return [
             'type'        => 'LineString',
-            'coordinates' => array_map(fn ($c) => [round((float) $c[0], 5), round((float) $c[1], 5)], $coords),
+            'coordinates' => array_map(fn ($c) => [round($c[0], 5), round($c[1], 5)], $kept),
         ];
+    }
+
+    /**
+     * Douglas-Peucker (itératif) : garde les points qui s'écartent de plus de $toleranceM mètres
+     * de la ligne entre les points gardés. Distances calculées sur une projection locale en mètres.
+     *
+     * @param list<array{0: float, 1: float}> $coords [lon, lat]
+     * @return list<array{0: float, 1: float}>
+     */
+    private function simplify(array $coords, float $toleranceM): array
+    {
+        $n = count($coords);
+        if ($n <= 2) return $coords;
+
+        // [lon, lat] -> mètres (projection équirectangulaire autour de la latitude moyenne)
+        $kx = 111_320 * cos(deg2rad(array_sum(array_column($coords, 1)) / $n));
+        $ky = 110_540;
+        $xy = array_map(fn ($c) => [$c[0] * $kx, $c[1] * $ky], $coords);
+
+        $keep = array_fill(0, $n, false);
+        $keep[0] = $keep[$n - 1] = true;
+        $stack = [[0, $n - 1]];
+        while ($stack) {
+            [$first, $last] = array_pop($stack);
+            [$ax, $ay] = $xy[$first];
+            [$bx, $by] = $xy[$last];
+            $dx = $bx - $ax;
+            $dy = $by - $ay;
+            $len2 = $dx * $dx + $dy * $dy;
+
+            $maxDist = 0.0;
+            $index = 0;
+            for ($i = $first + 1; $i < $last; $i++) {
+                [$px, $py] = $xy[$i];
+                // Distance du point au segment [A, B]
+                $t = $len2 > 0 ? max(0, min(1, (($px - $ax) * $dx + ($py - $ay) * $dy) / $len2)) : 0;
+                $dist = hypot($px - ($ax + $t * $dx), $py - ($ay + $t * $dy));
+                if ($dist > $maxDist) { $maxDist = $dist; $index = $i; }
+            }
+            if ($maxDist > $toleranceM) {
+                $keep[$index] = true;
+                $stack[] = [$first, $index];
+                $stack[] = [$index, $last];
+            }
+        }
+
+        return array_values(array_filter($coords, fn ($c, $i) => $keep[$i], ARRAY_FILTER_USE_BOTH));
     }
 
     /**
