@@ -191,7 +191,7 @@ function SearchTab({ onChanged }) {
         <Ionicons name="search" size={16} color={Colors.textMuted} />
         <TextInput
           style={s.searchInput} value={q} onChangeText={setQ} autoFocus autoCapitalize="none"
-          placeholder="Pseudo, nom ou email exact" placeholderTextColor="#b9aeb5"
+          placeholder="Pseudo ou nom" placeholderTextColor="#b9aeb5"
         />
         {busy && <ActivityIndicator size="small" color={Colors.parme} />}
       </View>
@@ -201,8 +201,8 @@ function SearchTab({ onChanged }) {
         contentContainerStyle={s.list}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={q.trim().length >= 2 && !busy
-          ? <Empty icon="search-outline" text="Aucun voyageur trouvé. Essayez son pseudo, son nom ou son adresse email exacte." />
-          : <Empty icon="person-add-outline" text="Recherchez vos amis par pseudo, nom ou adresse email exacte." />}
+          ? <Empty icon="search-outline" text="Aucun voyageur trouvé. Essayez son pseudo ou son nom." />
+          : <Empty icon="person-add-outline" text="Recherchez vos amis par pseudo ou par nom." />}
         renderItem={({ item }) => (
           <UserRow user={item} subtitle={item.username ? `@${item.username}` : null}>{actionFor(item)}</UserRow>
         )}

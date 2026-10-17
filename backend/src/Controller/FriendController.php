@@ -163,17 +163,16 @@ class FriendController extends AbstractController
         $q  = trim((string) $req->query->get('q', ''));
         if (mb_strlen($q) < 2) return $this->json([]);
 
-        // Pseudo / prénom / nom (partiel), ou email exact — l'email n'est jamais renvoyé
+        // Pseudo / prénom / nom (partiel). Pas de recherche par email : elle permettrait de savoir
+        // si une adresse a un compte Talaria (et à qui elle appartient)
         $like = '%' . addcslashes(mb_strtolower($q), '%_') . '%';
         $users = $this->em->getRepository(User::class)->createQueryBuilder('u')
             ->where('u.id != :me')
             ->andWhere('u.deletionRequestedAt IS NULL')
             ->andWhere('LOWER(u.username) LIKE :like OR LOWER(u.firstName) LIKE :like OR LOWER(u.lastName) LIKE :like
-                        OR LOWER(CONCAT(CONCAT(COALESCE(u.firstName, \'\'), \' \'), COALESCE(u.lastName, \'\'))) LIKE :like
-                        OR LOWER(u.email) = :email')
+                        OR LOWER(CONCAT(CONCAT(COALESCE(u.firstName, \'\'), \' \'), COALESCE(u.lastName, \'\'))) LIKE :like')
             ->setParameter('me', $me->getId())
             ->setParameter('like', $like)
-            ->setParameter('email', mb_strtolower($q))
             ->orderBy('u.firstName', 'ASC')
             ->setMaxResults(20)
             ->getQuery()->getResult();

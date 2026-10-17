@@ -25,7 +25,7 @@ final class FriendTest extends ApiTestCase
         $bob   = $this->registerAndLogin('bob@talaria.test');
         $this->profile($bob, ['firstName' => 'Bob', 'lastName' => 'Martin', 'username' => 'bobby']);
 
-        foreach (['bob', 'Martin', 'bobby', 'bob martin', 'bob@talaria.test'] as $q) {
+        foreach (['bob', 'Martin', 'bobby', 'bob martin'] as $q) {
             [$code, $results] = $this->json('GET', '/api/users/search?q=' . urlencode($q), null, $alice);
             self::assertSame(200, $code);
             self::assertCount(1, $results, "Recherche « $q »");
@@ -34,9 +34,11 @@ final class FriendTest extends ApiTestCase
             self::assertArrayNotHasKey('email', $results[0]);
         }
 
-        // Email partiel : pas de résultat (on ne peut pas énumérer les emails)
-        [, $results] = $this->json('GET', '/api/users/search?q=talaria.test', null, $alice);
-        self::assertCount(0, $results);
+        // Ni email partiel ni email exact : impossible de savoir si une adresse a un compte
+        foreach (['talaria.test', 'bob@talaria.test'] as $q) {
+            [, $results] = $this->json('GET', '/api/users/search?q=' . urlencode($q), null, $alice);
+            self::assertCount(0, $results, "Recherche « $q »");
+        }
 
         // On ne se trouve pas soi-même, et une requête trop courte ne renvoie rien
         [, $results] = $this->json('GET', '/api/users/search?q=alice@talaria.test', null, $alice);
@@ -78,7 +80,7 @@ final class FriendTest extends ApiTestCase
         [, $notifs] = $this->json('GET', '/api/notifications', null, $alice);
         self::assertSame('friend_accept', $notifs[0]['type']);
 
-        [, $results] = $this->json('GET', '/api/users/search?q=bob@talaria.test', null, $alice);
+        [, $results] = $this->json('GET', '/api/users/search?q=bob', null, $alice);
         self::assertSame('friends', $results[0]['relation']);
 
         [$code] = $this->json('DELETE', "/api/friends/$bobId", null, $alice);
