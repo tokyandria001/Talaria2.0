@@ -7,6 +7,7 @@ use App\Entity\ArticleLike;
 use App\Entity\Comment;
 use App\Entity\Notification;
 use App\Entity\User;
+use App\Service\ImageMetadataStripper;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -265,7 +266,7 @@ class ArticleController extends AbstractController
 
     /* ── Upload cover image ───────────────────── */
     #[Route('/upload-cover', methods: ['POST'])]
-    public function uploadCover(Request $request): JsonResponse
+    public function uploadCover(Request $request, ImageMetadataStripper $stripper): JsonResponse
     {
         try {
             $file = $request->files->get('cover');
@@ -295,6 +296,8 @@ class ArticleController extends AbstractController
             $ext      = $file->guessExtension() ?? 'jpg';
             $filename = uniqid('cover_', true) . '.' . $ext;
             $file->move($uploadDir, $filename);
+            // Position GPS, appareil, date... retirés de la photo
+            $stripper->strip($uploadDir . '/' . $filename);
 
             return $this->json(['path' => '/uploads/articles/' . $filename]);
 

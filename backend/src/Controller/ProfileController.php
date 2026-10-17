@@ -12,6 +12,7 @@ use App\Entity\Trip;
 use App\Entity\TripMessage;
 use App\Entity\User;
 use App\Service\Blocking;
+use App\Service\ImageMetadataStripper;
 use App\Service\ImageUploader;
 use App\Service\Referrals;
 use App\Service\UsernameSuggester;
@@ -129,6 +130,7 @@ class ProfileController extends AbstractController
     public function uploadPicture(
         Request $request,
         EntityManagerInterface $em,
+        ImageMetadataStripper $stripper,
     ): JsonResponse {
         /** @var User $user */
         $user = $this->getUser();
@@ -162,6 +164,8 @@ class ProfileController extends AbstractController
 
         $filename = sprintf('%s_%s.%s', $user->getId(), uniqid(), $file->guessExtension());
         $file->move($uploadsDir, $filename);
+        // Position GPS, appareil, date... retirés de la photo
+        $stripper->strip($uploadsDir . '/' . $filename);
 
         $publicPath = '/uploads/avatars/' . $filename;
         $user->setProfilePicture($publicPath);

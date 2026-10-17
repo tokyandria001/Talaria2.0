@@ -6,7 +6,7 @@ use App\Exception\InvalidInputException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
-/** Enregistre une image envoyée par l'utilisateur dans public/uploads/<dossier> */
+/** Enregistre une image envoyée par l'utilisateur dans public/uploads/<dossier>, sans ses métadonnées (GPS...) */
 final class ImageUploader
 {
     private const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -14,6 +14,7 @@ final class ImageUploader
 
     public function __construct(
         #[Autowire('%kernel.project_dir%')] private string $projectDir,
+        private ImageMetadataStripper $stripper,
     ) {}
 
     /**
@@ -33,6 +34,7 @@ final class ImageUploader
 
         $filename = sprintf('%s_%s.%s', $prefix, bin2hex(random_bytes(6)), $file->guessExtension() ?? 'jpg');
         $file->move($dir, $filename);
+        $this->stripper->strip("$dir/$filename");
 
         $this->remove($replacedPath);
 
