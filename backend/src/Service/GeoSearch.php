@@ -68,15 +68,21 @@ final class GeoSearch
         });
     }
 
+    /** Étapes intermédiaires au plus, entre le départ et l'arrivée */
+    public const MAX_VIA = 10;
+
     /**
-     * Itinéraire en voiture entre deux points : distance (km), durée (min) et tracé de la route
-     * (GeoJSON LineString, coordonnées [lon, lat] simplifiées par OSRM). Gardé en cache 30 jours.
+     * Itinéraire en voiture, avec des étapes intermédiaires facultatives ($via : liste de [lat, lon]) :
+     * distance (km), durée (min), tracé de la route (GeoJSON LineString, coordonnées [lon, lat] simplifiées
+     * par OSRM) et un tronçon par étape (legs). Gardé en cache 30 jours.
      *
-     * @return array{distanceKm: int, durationMin: int, geometry: array{type: string, coordinates: list<array{0: float, 1: float}>}|null}
+     * @param list<array{0: float, 1: float}> $via
+     * @return array{distanceKm: int, durationMin: int, legs: list<array{distanceKm: int, durationMin: int}>, geometry: array{type: string, coordinates: list<array{0: float, 1: float}>}|null}
      */
-    public function route(float $fromLat, float $fromLon, float $toLat, float $toLon): array
+    public function route(float $fromLat, float $fromLon, float $toLat, float $toLon, array $via = []): array
     {
-        $path = sprintf('%.5f,%.5f;%.5f,%.5f', $fromLon, $fromLat, $toLon, $toLat);
+        $points = [[$fromLat, $fromLon], ...array_slice($via, 0, self::MAX_VIA), [$toLat, $toLon]];
+        $path = implode(';', array_map(fn (array $p) => sprintf('%.5f,%.5f', $p[1], $p[0]), $points));
 
         // v2 : réponse avec le tracé (les entrées en cache sans tracé sont ignorées)
         return $this->cache->get('geo_route_v2_' . md5($path), function (ItemInterface $item) use ($path) {
@@ -97,6 +103,11 @@ final class GeoSearch
             return [
                 'distanceKm'  => (int) round($route['distance'] / 1000),
                 'durationMin' => (int) round($route['duration'] / 60),
+                // Un tronçon par étape : départ → étape 1 → … → arrivée
+                'legs'        => array_map(fn (array $leg) => [
+                    'distanceKm'  => (int) round(($leg['distance'] ?? 0) / 1000),
+                    'durationMin' => (int) round(($leg['duration'] ?? 0) / 60),
+                ], array_values(array_filter($route['legs'] ?? [], 'is_array'))),
                 'geometry'    => $this->traceRoute($route['geometry'] ?? null),
             ];
         });

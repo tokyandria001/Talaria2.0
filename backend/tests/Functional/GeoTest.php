@@ -51,6 +51,19 @@ final class GeoTest extends ApiTestCase
         // Tracé de la route pour la carte : [lon, lat] arrondis à 5 décimales
         self::assertSame('LineString', $route['geometry']['type']);
         self::assertSame([[2.35222, 48.85661], [3.5, 47.3], [4.83566, 45.76404]], $route['geometry']['coordinates']);
+        self::assertSame([['distanceKm' => 466, 'durationMin' => 298]], $route['legs'], 'Sans étape : un seul tronçon');
+
+        // Étapes intermédiaires : un tronçon par étape
+        [$code, $withStops] = $this->json('GET', '/api/geo/route?from=48.8566,2.3522&to=45.7640,4.8357&via=' . urlencode('47.3220,5.0415|46.7800,4.8530'), null, $token);
+        self::assertSame(200, $code);
+        self::assertCount(3, $withStops['legs'], 'Paris → Dijon → Chalon → Lyon');
+        self::assertSame(155, $withStops['legs'][0]['distanceKm']);
+
+        [$code] = $this->json('GET', '/api/geo/route?from=48.8566,2.3522&to=45.7640,4.8357&via=nord', null, $token);
+        self::assertSame(400, $code, 'Étape invalide');
+        $tooMany = implode('|', array_fill(0, 11, '46.5,4.5'));
+        [$code] = $this->json('GET', '/api/geo/route?from=48.8566,2.3522&to=45.7640,4.8357&via=' . urlencode($tooMany), null, $token);
+        self::assertSame(400, $code, '10 étapes au plus');
 
         [$code] = $this->json('GET', '/api/geo/route?from=nord&to=45,4', null, $token);
         self::assertSame(400, $code);

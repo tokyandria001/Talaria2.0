@@ -88,7 +88,10 @@ class GeoController extends AbstractController
         )]);
     }
 
-    /** Distance et durée en voiture : from=lat,lng & to=lat,lng */
+    /**
+     * Itinéraire en voiture : from=lat,lng & to=lat,lng, étapes facultatives via=lat,lng|lat,lng (10 au plus).
+     * Distance, durée, tracé et un tronçon (legs) par étape.
+     */
     #[Route('/api/geo/route', name: 'api_geo_route', methods: ['GET'])]
     public function route(Request $request, GeoSearch $geo, RateLimiterFactory $geoSearchLimiter): JsonResponse
     {
@@ -98,18 +101,32 @@ class GeoController extends AbstractController
             return $this->json(['message' => 'Trop de recherches, réessayez dans un instant.'], 429);
         }
 
-        $point = function (string $key) use ($request): ?array {
-            $parts = explode(',', (string) $request->query->get($key, ''));
-            if (count($parts) !== 2 || !is_numeric($parts[0]) || !is_numeric($parts[1])) return null;
-            [$lat, $lng] = array_map('floatval', $parts);
+        $parse = function (string $value): ?array {
+            $parts = explode(',', $value);
+            if (count($parts) !== 2 || !is_numeric(trim($parts[0])) || !is_numeric(trim($parts[1]))) return null;
+            [$lat, $lng] = array_map(fn ($v) => (float) trim($v), $parts);
             return abs($lat) <= 90 && abs($lng) <= 180 ? [$lat, $lng] : null;
         };
-        $from = $point('from');
-        $to = $point('to');
+        $from = $parse((string) $request->query->get('from', ''));
+        $to = $parse((string) $request->query->get('to', ''));
         if (!$from || !$to) return $this->json(['message' => 'Points de départ et d\'arrivée requis (from=lat,lng & to=lat,lng).'], 400);
 
+        $via = [];
+        $rawVia = trim((string) $request->query->get('via', ''));
+        if ($rawVia !== '') {
+            $steps = explode('|', $rawVia);
+            if (count($steps) > GeoSearch::MAX_VIA) {
+                return $this->json(['message' => sprintf('%d étapes au plus.', GeoSearch::MAX_VIA)], 400);
+            }
+            foreach ($steps as $step) {
+                $p = $parse($step);
+                if (!$p) return $this->json(['message' => 'Étape invalide : via=lat,lng|lat,lng'], 400);
+                $via[] = $p;
+            }
+        }
+
         try {
-            return $this->json($geo->route($from[0], $from[1], $to[0], $to[1]));
+            return $this->json($geo->route($from[0], $from[1], $to[0], $to[1], $via));
         } catch (GeoSearchUnavailable) {
             return $this->json(['message' => 'Le calcul d\'itinéraire est momentanément indisponible.'], 503);
         }
