@@ -11,7 +11,8 @@ Talaria est une travel super-app en cours de développement — un espace tout-e
 | Couche | Technologie |
 |---|---|
 | Backend | Symfony 7.2 (PHP 8.3) |
-| Frontend | React 18 + Vite |
+| App mobile | Expo (React Native), dossier `mobile/` |
+| Site web | app.talaria.world : dépôt séparé `talaria-webapp` (hébergé sur Vercel) |
 | Base de données | MySQL / MariaDB 10.4 (XAMPP) |
 | Auth | JWT via LexikJWTAuthenticationBundle (clés RSA) |
 | ORM | Doctrine |
@@ -28,16 +29,11 @@ Talaria2.0/
 │   │   ├── Controller/   # AuthController, ProfileController, ArticleController, PlaceController
 │   │   └── Entity/       # User, Article, ArticleLike, Comment, Place
 │   └── migrations/
-└── frontend/         # SPA React
-    └── src/
-        ├── pages/        # LandingPage, LoginPage, RegisterPage, DashboardPage,
-        │                 # ProfilePage, MapPage, CommunityPage
-        ├── components/   # Navbar, WriteArticleModal, ArticleDetailModal, AddPlaceModal
-        ├── api/
-        └── contexts/
+├── mobile/           # App mobile Expo (React Native)
+└── deploy/           # Script de déploiement du VPS (deploy.sh)
 ```
 
-Le frontend tourne sur `http://localhost:5173`. Un proxy Vite redirige `/api` et `/uploads` vers le backend sur `http://localhost:8000`.
+Le site web `app.talaria.world` vit dans son propre dépôt (`talaria-webapp`) et appelle la même API (`https://api.talaria.world`). L'ancienne web-app React de ce dépôt a été retirée ; elle reste disponible dans l'historique git.
 
 La base de données s'appelle `tar`, utilisateur `root` sans mot de passe, port 3306.
 
@@ -101,7 +97,7 @@ Espace communautaire avec articles de voyage, et carte interactive des lieux.
 
 ### Prérequis
 - PHP 8.3+, Composer
-- Node.js 20+, npm
+- Node.js 20+, npm (app mobile)
 - XAMPP (MySQL/MariaDB sur le port 3306)
 
 ### Backend
@@ -121,13 +117,12 @@ Les clés JWT RSA se trouvent dans `backend/config/jwt/`. Si elles sont absentes
 php bin/console lexik:jwt:generate-keypair
 ```
 
-### Frontend
+### App mobile
 
 ```bash
-cd frontend
+cd mobile
 npm install
-npm run dev
-# → http://localhost:5173
+npx expo start
 ```
 
 ---
