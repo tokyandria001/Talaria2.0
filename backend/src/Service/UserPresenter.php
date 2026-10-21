@@ -19,6 +19,7 @@ final class UserPresenter
             'lastName'       => $u->getLastName(),
             'displayName'    => $name !== '' ? $name : ($u->getPseudo() ?? 'Voyageur'),
             'profilePicture' => $u->getProfilePicture(),
+            'isAdmin'        => $u->isAdmin(),
         ];
     }
 
@@ -32,6 +33,7 @@ final class UserPresenter
             'lastName'          => $u->getLastName(),
             'username'          => $u->getPseudo(),
             'profilePicture'    => $u->getProfilePicture(),
+            'isAdmin'           => $u->isAdmin(),
             'coverPhoto'        => $u->getCoverPhoto(),
             'bio'               => $u->getBio(),
             'phone'             => $u->getPhone(),

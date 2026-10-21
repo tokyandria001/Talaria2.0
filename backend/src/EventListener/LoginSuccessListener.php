@@ -40,6 +40,7 @@ final class LoginSuccessListener
             'firstName'      => $user->getFirstName(),
             'lastName'       => $user->getLastName(),
             'profilePicture' => $user->getProfilePicture(),
+            'isAdmin'        => $user->isAdmin(),
             'deletionCanceled' => $restored,
         ]);
     }

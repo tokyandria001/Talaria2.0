@@ -261,6 +261,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     }
     public function setRoles(array $roles): static { $this->roles = $roles; return $this; }
 
+    /** Administrateur (rôle ROLE_ADMIN, attribué par la commande app:admin) : badge sur le site */
+    public function isAdmin(): bool { return in_array('ROLE_ADMIN', $this->roles, true); }
+    public function setAdmin(bool $admin): static
+    {
+        $roles = array_values(array_diff($this->roles, ['ROLE_ADMIN']));
+        $this->roles = $admin ? [...$roles, 'ROLE_ADMIN'] : $roles;
+        return $this;
+    }
+
     public function getPassword(): ?string { return $this->password; }
     public function setPassword(string $password): static { $this->password = $password; return $this; }
     public function hasPassword(): bool { return $this->password !== null; }
