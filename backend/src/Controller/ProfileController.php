@@ -12,7 +12,6 @@ use App\Entity\Trip;
 use App\Entity\TripMessage;
 use App\Entity\User;
 use App\Service\Blocking;
-use App\Service\ImageMetadataStripper;
 use App\Service\ImageUploader;
 use App\Service\Referrals;
 use App\Service\UsernameSuggester;
@@ -127,47 +126,12 @@ class ProfileController extends AbstractController
     }
 
     #[Route('/picture', name: 'picture', methods: ['POST'])]
-    public function uploadPicture(
-        Request $request,
-        EntityManagerInterface $em,
-        ImageMetadataStripper $stripper,
-    ): JsonResponse {
+    public function uploadPicture(Request $request, EntityManagerInterface $em, ImageUploader $uploader): JsonResponse
+    {
         /** @var User $user */
         $user = $this->getUser();
-        $file = $request->files->get('picture');
-
-        if (!$file) {
-            return $this->json(['message' => 'Aucun fichier fourni.'], 400);
-        }
-
-        $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-        if (!in_array($file->getMimeType(), $allowed)) {
-            return $this->json(['message' => 'Format non supporté. JPEG, PNG, WEBP ou GIF uniquement.'], 415);
-        }
-
-        if ($file->getSize() > 5 * 1024 * 1024) {
-            return $this->json(['message' => 'Image trop lourde (max 5 Mo).'], 413);
-        }
-
-        $uploadsDir = $this->getParameter('kernel.project_dir') . '/public/uploads/avatars';
-        if (!is_dir($uploadsDir)) {
-            mkdir($uploadsDir, 0755, true);
-        }
-
-        // Remove old avatar
-        if ($user->getProfilePicture()) {
-            $oldPath = $this->getParameter('kernel.project_dir') . '/public' . $user->getProfilePicture();
-            if (file_exists($oldPath)) {
-                unlink($oldPath);
-            }
-        }
-
-        $filename = sprintf('%s_%s.%s', $user->getId(), uniqid(), $file->guessExtension());
-        $file->move($uploadsDir, $filename);
-        // Position GPS, appareil, date... retirés de la photo
-        $stripper->strip($uploadsDir . '/' . $filename);
-
-        $publicPath = '/uploads/avatars/' . $filename;
+        // Contrôles, nettoyage (métadonnées, GPS...) et nom aléatoire : ImageUploader
+        $publicPath = $uploader->upload($request->files->get('picture'), 'avatars', (string) $user->getId(), $user->getProfilePicture());
         $user->setProfilePicture($publicPath);
         $em->flush();
 

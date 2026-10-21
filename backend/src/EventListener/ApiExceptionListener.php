@@ -14,7 +14,9 @@ final class ApiExceptionListener
     {
         $e = $event->getThrowable();
         if ($e instanceof InvalidInputException) {
-            $event->setResponse(new JsonResponse(['message' => $e->getMessage()], 400));
+            // Code d'erreur porté par l'exception (ex. 429 trop d'envois), 400 par défaut
+            $status = $e->getCode() >= 400 && $e->getCode() < 500 ? $e->getCode() : 400;
+            $event->setResponse(new JsonResponse(['message' => $e->getMessage()], $status));
         }
     }
 }

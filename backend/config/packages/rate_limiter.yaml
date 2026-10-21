@@ -11,6 +11,11 @@ framework:
             limit: 30
             interval: '1 hour'
         # Autocomplétion des villes (service gratuit Photon, à ménager) : 60 recherches par minute et par utilisateur
+        # Images envoyées (profil, couvertures, lieux, groupes, articles) : 30 par heure et par utilisateur
+        image_upload:
+            policy: sliding_window
+            limit: 30
+            interval: '1 hour'
         geo_search:
             policy: sliding_window
             limit: 60
