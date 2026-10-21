@@ -3,20 +3,25 @@
 namespace App\Service;
 
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Symfony\Contracts\HttpClient\ResponseInterface;
 
 /**
  * Recherche de villes et de pays (destination d'un voyage), d'adresses (logement) et itinéraires routiers.
  *
- * Fournisseurs gratuits basés sur OpenStreetMap, à utiliser avec modération (cache + limite par utilisateur) :
- * - Photon (photon.komoot.io) pour les lieux et les adresses ;
+ * Fournisseurs basés sur OpenStreetMap, à utiliser avec modération (cache + limite par utilisateur) :
+ * - Geoapify (clé GEOAPIFY_API_KEY, offre gratuite 3 000 requêtes/jour) pour les lieux, les adresses,
+ *   les gares, aéroports et logements ; ses réponses sont converties au format de Photon ;
+ * - Photon (photon.komoot.io) en secours : sans clé, ou si Geoapify ne répond pas / quota atteint ;
  * - OSRM (router.project-osrm.org, serveur de démonstration) pour la distance en voiture.
  */
 final class GeoSearch
 {
     private const URL = 'https://photon.komoot.io/api/';
+    private const GEOAPIFY_URL = 'https://api.geoapify.com/';
     private const ROUTE_URL = 'https://router.project-osrm.org/route/v1/driving/';
     private const USER_AGENT = 'Talaria/1.0 (+https://talaria.world)';
     private const LIMIT = 6;
@@ -25,6 +30,7 @@ final class GeoSearch
         private HttpClientInterface $httpClient,
         private CacheInterface $cache,
         private LoggerInterface $logger,
+        #[Autowire('%env(default::GEOAPIFY_API_KEY)%')] private ?string $geoapifyKey = null,
     ) {}
 
     /**
@@ -41,7 +47,9 @@ final class GeoSearch
 
         return $this->cache->get('geo_address_' . md5(mb_strtolower($query) . json_encode($bias)), function (ItemInterface $item) use ($query, $bias) {
             $item->expiresAfter(7 * 86400);
-            $features = $this->photon(['q' => $query, 'lang' => 'fr', 'limit' => self::LIMIT] + $bias);
+            $features = $this->geoapify('v1/geocode/autocomplete', ['text' => $query, 'lang' => 'fr', 'limit' => self::LIMIT]
+                    + ($bias ? ['bias' => "proximity:{$bias['lon']},{$bias['lat']}"] : []))
+                ?? $this->photon(['q' => $query, 'lang' => 'fr', 'limit' => self::LIMIT] + $bias);
 
             $results = [];
             foreach ($features as $f) {
@@ -209,9 +217,13 @@ final class GeoSearch
         return $this->cache->get($key, function (ItemInterface $item) use ($city, $lat, $lon) {
             $item->expiresAfter(30 * 86400);
             $bias = ['lat' => round($lat, 3), 'lon' => round($lon, 3), 'lang' => 'fr', 'limit' => 10];
+            $near = fn (string $categories, int $km) => $this->geoapify('v2/places', [
+                'categories' => $categories, 'filter' => sprintf('circle:%.4f,%.4f,%d', $lon, $lat, $km * 1000),
+                'bias' => sprintf('proximity:%.4f,%.4f', $lon, $lat), 'lang' => 'fr', 'limit' => 10,
+            ]);
             $found = [
-                'train' => [$this->photon(['q' => $city ?: 'gare', 'osm_tag' => 'railway:station'] + $bias), 25, 3],
-                'avion' => [$this->photon(['q' => 'aéroport', 'osm_tag' => 'aeroway:aerodrome'] + $bias), 120, 3],
+                'train' => [$near('public_transport.train', 25) ?? $this->photon(['q' => $city ?: 'gare', 'osm_tag' => 'railway:station'] + $bias), 25, 3],
+                'avion' => [$near('airport', 120) ?? $this->photon(['q' => 'aéroport', 'osm_tag' => 'aeroway:aerodrome'] + $bias), 120, 3],
             ];
 
             $hubs = [];
@@ -245,7 +257,12 @@ final class GeoSearch
 
         return $this->cache->get($key, function (ItemInterface $item) use ($query, $osmTag, $lat, $lon, $maxKm) {
             $item->expiresAfter(7 * 86400);
-            $features = $this->photon(['q' => $query, 'osm_tag' => $osmTag, 'lat' => round($lat, 3), 'lon' => round($lon, 3), 'lang' => 'fr', 'limit' => 15]);
+            $category = self::GEOAPIFY_CATEGORIES[$osmTag] ?? null;
+            $features = ($category ? $this->geoapify('v2/places', [
+                'categories' => $category, 'filter' => sprintf('circle:%.4f,%.4f,%d', $lon, $lat, (int) ($maxKm * 1000)),
+                'bias' => sprintf('proximity:%.4f,%.4f', $lon, $lat), 'lang' => 'fr', 'limit' => 15,
+            ]) : null)
+                ?? $this->photon(['q' => $query, 'osm_tag' => $osmTag, 'lat' => round($lat, 3), 'lon' => round($lon, 3), 'lang' => 'fr', 'limit' => 15]);
 
             $results = [];
             foreach ($features as $f) {
@@ -275,6 +292,90 @@ final class GeoSearch
         return 6371 * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 
+    /** Types OpenStreetMap (Photon) → catégories Geoapify (logements proposés) */
+    private const GEOAPIFY_CATEGORIES = [
+        'tourism:hotel'       => 'accommodation.hotel',
+        'tourism:hostel'      => 'accommodation.hostel',
+        'tourism:apartment'   => 'accommodation.apartment',
+        'tourism:guest_house' => 'accommodation.guest_house',
+    ];
+
+    /**
+     * Appel à Geoapify, réponse convertie au format de Photon (lieux GeoJSON, propriétés « type » et « countrycode »).
+     * Sans clé, ou en cas d'échec (panne, quota du jour atteint) : null, et l'appelant passe à Photon.
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    private function geoapify(string $path, array $params): ?array
+    {
+        return $this->geoapifyRead($this->geoapifySend($path, $params));
+    }
+
+    /** Envoie la requête sans attendre la réponse (plusieurs requêtes partent ainsi en parallèle) */
+    private function geoapifySend(string $path, array $params): ?ResponseInterface
+    {
+        if (!$this->geoapifyKey) return null;
+        try {
+            return $this->httpClient->request('GET', self::GEOAPIFY_URL . $path, [
+                'query'   => $params + ['format' => 'geojson', 'apiKey' => $this->geoapifyKey],
+                'headers' => ['User-Agent' => self::USER_AGENT],
+                'timeout' => 4,
+            ]);
+        } catch (\Throwable $e) {
+            $this->geoapifyFailed($e);
+            return null;
+        }
+    }
+
+    /** @return list<array<string, mixed>>|null */
+    private function geoapifyRead(?ResponseInterface $response): ?array
+    {
+        if (!$response) return null;
+        try {
+            $data = $response->toArray();
+        } catch (\Throwable $e) {
+            $this->geoapifyFailed($e);
+            return null;
+        }
+
+        return array_map(function (array $f) {
+            $p = $f['properties'] ?? [];
+            $type = $p['result_type'] ?? null;
+            $p['type'] = $type;
+            $p['countrycode'] = $p['country_code'] ?? null;
+            // Villes et pays : Geoapify range souvent leur nom dans « city » / « country »
+            $p['name'] ??= match ($type) { 'city' => $p['city'] ?? null, 'country' => $p['country'] ?? null, default => null };
+            $f['properties'] = $p;
+            return $f;
+        }, array_values(array_filter($data['features'] ?? [], 'is_array')));
+    }
+
+    private function geoapifyFailed(\Throwable $e): void
+    {
+        // Le message d'erreur peut contenir l'URL, donc la clé : on ne journalise que le type d'erreur
+        $this->logger->warning('Geoapify indisponible ({class}), secours Photon', ['class' => (new \ReflectionClass($e))->getShortName()]);
+    }
+
+    /**
+     * Villes et pays en un seul tour : deux recherches Geoapify envoyées en parallèle (« city » et « country »).
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    private function geoapifyCitiesAndCountries(string $query): ?array
+    {
+        if (!$this->geoapifyKey) return null;
+        $base = ['text' => $query, 'lang' => 'fr', 'limit' => self::LIMIT];
+        $countriesResponse = $this->geoapifySend('v1/geocode/autocomplete', $base + ['type' => 'country']);
+        $citiesResponse = $this->geoapifySend('v1/geocode/autocomplete', $base + ['type' => 'city']);
+        $countries = $this->geoapifyRead($countriesResponse);
+        $cities = $this->geoapifyRead($citiesResponse);
+        if ($cities === null && $countries === null) return null;
+
+        // Un pays dont le nom correspond exactement passe devant (« Thaïlande »), sinon les villes d'abord
+        $exact = array_filter($countries ?? [], fn ($f) => mb_strtolower((string) ($f['properties']['name'] ?? '')) === mb_strtolower($query));
+        return array_slice($exact ? [...$countries ?? [], ...$cities ?? []] : [...$cities ?? [], ...$countries ?? []], 0, self::LIMIT);
+    }
+
     /** Appel à Photon ; service indisponible → GeoSearchUnavailable (rien n'est mis en cache) */
     private function photon(array $params, array $layers = []): array
     {
@@ -302,7 +403,8 @@ final class GeoSearch
         return $this->cache->get('geo_search_' . md5(mb_strtolower($query)), function (ItemInterface $item) use ($query) {
             $item->expiresAfter(7 * 86400);
             // Villes, villages et pays, noms en français (service indisponible : l'app laisse saisir librement)
-            $features = $this->photon(['q' => $query, 'lang' => 'fr', 'limit' => self::LIMIT], ['city', 'country']);
+            $features = $this->geoapifyCitiesAndCountries($query)
+                ?? $this->photon(['q' => $query, 'lang' => 'fr', 'limit' => self::LIMIT], ['city', 'country']);
 
             $results = [];
             foreach ($features as $f) {
