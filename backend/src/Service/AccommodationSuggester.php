@@ -17,6 +17,8 @@ final class AccommodationSuggester
 {
     public const MAX = 3;
     private const RADIUS_KM = 8;
+    /** Les campings sont rarement en ville : on cherche plus loin */
+    private const RADIUS_KM_CAMPING = 25;
 
     /** Prix estimé par personne et par nuit (€), selon le style de voyage */
     public const PRICE_PER_NIGHT = [
@@ -24,6 +26,7 @@ final class AccommodationSuggester
         'auberge'  => ['budget' => 25, 'confort' => 35, 'luxe' => 50],
         'airbnb'   => ['budget' => 35, 'confort' => 50, 'luxe' => 90],
         'habitant' => ['budget' => 30, 'confort' => 45, 'luxe' => 70],
+        'camping'  => ['budget' => 12, 'confort' => 20, 'luxe' => 40],
     ];
 
     /** Type de logement → catégorie des lieux en base (null : pas dans la base) et recherche OpenStreetMap */
@@ -32,6 +35,7 @@ final class AccommodationSuggester
         'auberge'  => ['place' => 'auberge', 'q' => 'hostel',      'osm' => 'tourism:hostel'],
         'airbnb'   => ['place' => null,      'q' => 'apartments',  'osm' => 'tourism:apartment'],
         'habitant' => ['place' => null,      'q' => 'guest house', 'osm' => 'tourism:guest_house'],
+        'camping'  => ['place' => 'camping', 'q' => 'camping',     'osm' => 'tourism:camp_site'],
     ];
 
     /** Noms trop vagues pour être proposés (« Hotel », « Apartments »...) */
@@ -52,11 +56,12 @@ final class AccommodationSuggester
         $nights = max(1, (int) $checkIn->diff($checkOut)->days);
         $travelers = max(1, min(30, $travelers));
         $perNight = self::PRICE_PER_NIGHT[$type][in_array($style, ['budget', 'confort', 'luxe'], true) ? $style : 'confort'];
+        $radius = $type === 'camping' ? self::RADIUS_KM_CAMPING : self::RADIUS_KM;
 
-        $found = $source['place'] ? $this->fromPlaces($source['place'], $lat, $lon) : [];
+        $found = $source['place'] ? $this->fromPlaces($source['place'], $lat, $lon, $radius) : [];
         if (count($found) < self::MAX) {
             try {
-                $found = [...$found, ...$this->geo->nearbyByTag($source['q'], $source['osm'], $lat, $lon, self::RADIUS_KM)];
+                $found = [...$found, ...$this->geo->nearbyByTag($source['q'], $source['osm'], $lat, $lon, $radius)];
             } catch (GeoSearchUnavailable) {
                 // Photon indisponible : on garde les lieux de la base
             }
@@ -80,10 +85,10 @@ final class AccommodationSuggester
     }
 
     /** @return list<array{name: string, address: ?string, city: ?string, latitude: float, longitude: float, distanceKm: float}> */
-    private function fromPlaces(string $tag, float $lat, float $lon): array
+    private function fromPlaces(string $tag, float $lat, float $lon, float $radius): array
     {
-        $dLat = self::RADIUS_KM / 111;
-        $dLon = self::RADIUS_KM / (111 * max(0.2, cos(deg2rad($lat))));
+        $dLat = $radius / 111;
+        $dLon = $radius / (111 * max(0.2, cos(deg2rad($lat))));
         // Distance approchée (en degrés) pour trier en base, la vraie distance est calculée ensuite
         $places = $this->em->createQueryBuilder()
             ->select('p')->from(Place::class, 'p')

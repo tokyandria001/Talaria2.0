@@ -38,6 +38,7 @@ const ACCOM_TYPES = [
   { value: 'airbnb',   label: 'Airbnb' },
   { value: 'auberge',  label: 'Auberge' },
   { value: 'habitant', label: "Chez l'habitant" },
+  { value: 'camping',  label: 'Camping' },
 ];
 
 const iso    = (d) => (d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '');

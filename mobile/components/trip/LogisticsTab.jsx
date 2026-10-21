@@ -11,7 +11,8 @@ import { Colors } from '../../constants/Colors';
 
 const ACCOM_TYPES = [
   { value: 'hotel', label: 'Hôtel' }, { value: 'airbnb', label: 'Airbnb' },
-  { value: 'auberge', label: 'Auberge' }, { value: 'habitant', label: "Chez l'habitant" }, { value: 'autre', label: 'Autre' },
+  { value: 'auberge', label: 'Auberge' }, { value: 'habitant', label: "Chez l'habitant" }, { value: 'camping', label: 'Camping' },
+  { value: 'autre', label: 'Autre' },
 ];
 const MODES = [
   { value: 'train', label: 'Train', icon: 'train' }, { value: 'avion', label: 'Avion', icon: 'airplane' },

@@ -27,7 +27,7 @@ class Accommodation
 
     /** hotel | airbnb | autre */
     #[ORM\Column(length: 20)]
-    #[Assert\Choice(choices: ['hotel', 'airbnb', 'auberge', 'habitant', 'autre'], message: 'Type de logement invalide.')]
+    #[Assert\Choice(choices: ['hotel', 'airbnb', 'auberge', 'habitant', 'camping', 'autre'], message: 'Type de logement invalide.')]
     private string $type = 'hotel';
 
     #[ORM\Column(type: 'date_immutable')]

@@ -298,6 +298,7 @@ final class GeoSearch
         'tourism:hostel'      => 'accommodation.hostel',
         'tourism:apartment'   => 'accommodation.apartment',
         'tourism:guest_house' => 'accommodation.guest_house',
+        'tourism:camp_site'   => 'camping.camp_site',
     ];
 
     /**

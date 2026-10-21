@@ -65,6 +65,9 @@ final class PhotonMockResponseFactory
             ]]));
         }
         // Hôtels autour de Lyon : un nom vague (« Hotel »), un doublon de la base et un hôtel trop loin, écartés
+        if (($query['osm_tag'] ?? '') === 'tourism:camp_site') {
+            return new MockResponse(json_encode(['type' => 'FeatureCollection', 'features' => []]));
+        }
         if (($query['osm_tag'] ?? '') === 'tourism:hotel') {
             return new MockResponse(json_encode(['type' => 'FeatureCollection', 'features' => [
                 $this->feature('Hotel', 'house', [4.835, 45.760], ['city' => 'Lyon']),

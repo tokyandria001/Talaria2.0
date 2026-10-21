@@ -31,6 +31,13 @@ final class AccommodationSuggestTest extends ApiTestCase
 
         [$code] = $this->json('GET', '/api/geo/accommodations?lat=45.75&lon=4.83&checkIn=2027-05-04&checkOut=2027-05-01', null, $token);
         self::assertSame(400, $code);
+
+        // Camping : le camping de la base, à 12 € par personne et par nuit (style budget)
+        [$code, $data] = $this->json('GET', '/api/geo/accommodations?lat=45.7578&lon=4.8320&type=camping&checkIn=2027-05-01&checkOut=2027-05-04&travelers=2&city=Lyon', null, $token);
+        self::assertSame(200, $code);
+        self::assertSame('Camping de la Saône', $data['suggestions'][0]['name']);
+        self::assertSame('camping', $data['suggestions'][0]['type']);
+        self::assertSame(72, $data['suggestions'][0]['estimatedPrice'], '12 € × 3 nuits × 2 voyageurs');
     }
 
     public function testSuggestedAccommodationIsFlagged(): void
@@ -45,6 +52,12 @@ final class AccommodationSuggestTest extends ApiTestCase
         ], $token);
         self::assertSame(201, $code);
         self::assertTrue($a['suggested']);
+
+        // Le camping est un type de logement accepté
+        [$code] = $this->json('POST', "/api/trips/{$trip['id']}/accommodations", [
+            'name' => 'Camping de la Saône', 'type' => 'camping', 'checkIn' => '2027-05-01', 'checkOut' => '2027-05-04', 'price' => 72, 'suggested' => true,
+        ], $token);
+        self::assertSame(201, $code);
 
         [, $log] = $this->json('GET', "/api/trips/{$trip['id']}/logistics", null, $token);
         self::assertTrue($log['accommodations'][0]['suggested']);
