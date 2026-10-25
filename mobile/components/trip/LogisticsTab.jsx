@@ -7,6 +7,7 @@ import BottomSheet, { Chip, SheetLabel } from '../BottomSheet';
 import PlaceAutocomplete from '../PlaceAutocomplete';
 import UserAvatar from '../UserAvatar';
 import AccommodationSuggestions from './AccommodationSuggestions';
+import { fuelPriceToday } from '../../api/fuel';
 import { Colors } from '../../constants/Colors';
 
 const ACCOM_TYPES = [
@@ -385,13 +386,16 @@ function TransportSheet({ trip, initial, meHeads, onClose, onSave }) {
   }, [initial, trip.departureCity]);
   const set = (k) => (v) => setF(p => ({ ...p, [k]: v }));
 
-  // Voiture : essence aller-retour (7 L/100 km à 1,72 €/L) d'après l'itinéraire
+  // Voiture : essence aller-retour (7 L/100 km, prix moyen du jour du SP95-E10) d'après l'itinéraire
   useEffect(() => {
     const from = f.departurePlace;
     if (f.mode !== 'voiture' || !from || trip.destinationLatitude == null) { setEstimate(null); return undefined; }
     let cancelled = false;
-    client.get('/api/geo/route', { params: { from: `${from.latitude},${from.longitude}`, to: `${trip.destinationLatitude},${trip.destinationLongitude}` } })
-      .then(({ data }) => { if (!cancelled) setEstimate({ km: data.distanceKm, fuel: Math.round(data.distanceKm * 2 * 7 / 100 * 1.72) }); })
+    Promise.all([
+      client.get('/api/geo/route', { params: { from: `${from.latitude},${from.longitude}`, to: `${trip.destinationLatitude},${trip.destinationLongitude}` } }),
+      fuelPriceToday(),
+    ])
+      .then(([{ data }, price]) => { if (!cancelled) setEstimate({ km: data.distanceKm, fuel: Math.round(data.distanceKm * 2 * 7 / 100 * price) }); })
       .catch(() => { if (!cancelled) setEstimate(null); });
     return () => { cancelled = true; };
   }, [f.mode, f.departurePlace, trip.destinationLatitude, trip.destinationLongitude]);

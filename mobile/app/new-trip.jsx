@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import client from '../api/client';
+import { fuelPriceToday, formatFuelPrice, DEFAULT_FUEL_PRICE } from '../api/fuel';
 import GroupHero from '../components/groups/GroupHero';
 import FriendPickerSheet from '../components/groups/FriendPickerSheet';
 import GroupPickerSheet from '../components/groups/GroupPickerSheet';
@@ -81,12 +82,17 @@ export default function NewTripScreen() {
     // Départ : la ville indiquée à l'onboarding
     departurePlace: user?.homeCity && user.homeLatitude != null ? { name: user.homeCity, label: user.homeCity, latitude: user.homeLatitude, longitude: user.homeLongitude } : null,
     transportMode: 'avion', departureCity: user?.homeCity ?? '', ticketPrice: '', eachBooksOwnTransport: false,
-    distanceKm: '', distanceManual: false, fuelPrice: '1,72', fuelConsumption: '7', tollCost: '',
+    distanceKm: '', distanceManual: false, fuelPrice: formatFuelPrice(DEFAULT_FUEL_PRICE), fuelConsumption: '7', tollCost: '',
     accomType: 'airbnb', accomName: '', accomPrice: '', accomAddress: '', accomAddressPlace: null, accomLink: '',
     accomSuggestion: null, accomManual: false,     // logement proposé par Talaria (son nom) ; « saisir le mien »
     needsRental: false, rentalCost: '', splitCostsEqually: true,
   });
   const set = (k) => (v) => setF(p => ({ ...p, [k]: v }));
+
+  // Prix moyen du jour du SP95-E10 (flux officiel), tant que la personne n'a pas saisi le sien
+  useEffect(() => {
+    fuelPriceToday().then(price => setF(p => (p.fuelPrice === formatFuelPrice(DEFAULT_FUEL_PRICE) ? { ...p, fuelPrice: formatFuelPrice(price) } : p)));
+  }, []);
   // Recherche de villes indisponible : la destination tapée librement est acceptée
   const [geoDown, setGeoDown] = useState(false);
   // Texte modifié = choix annulé ; suggestion choisie = son nom dans le champ
@@ -406,7 +412,7 @@ export default function NewTripScreen() {
                   <View style={s.row}>
                     <View style={{ flex: 1 }}>
                       <SubLabel>Carburant (€/L)</SubLabel>
-                      <Input placeholder="1,72" keyboardType="decimal-pad" value={f.fuelPrice} onChangeText={set('fuelPrice')} />
+                      <Input placeholder={formatFuelPrice(DEFAULT_FUEL_PRICE)} keyboardType="decimal-pad" value={f.fuelPrice} onChangeText={set('fuelPrice')} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <SubLabel>Conso. (L/100 km)</SubLabel>

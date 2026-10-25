@@ -38,6 +38,11 @@ final class PhotonMockResponseFactory
             self::$webhooks[] = [$headers, $options['body'] ?? ''];
             return new MockResponse('', ['http_code' => 204]);
         }
+        if (str_contains($url, 'data.economie.gouv.fr')) {
+            return new MockResponse(json_encode(['total_count' => 9812, 'results' => [[
+                'gazole' => 2.3755, 'sp95' => 2.2037, 'e10' => 2.1416, 'sp98' => 2.2585, 'e85' => 0.9101, 'gplc' => null, 'stations' => 9812,
+            ]]]));
+        }
         if (str_contains($url, 'googleapis.com/oauth2/v1/certs')) {
             return new MockResponse(json_encode(self::$googleCerts));
         }
