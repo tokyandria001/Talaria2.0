@@ -60,9 +60,14 @@ final class ImageUploadTest extends ApiTestCase
         self::assertSame(400, $code, 'PDF refusé');
 
         // Dimensions et animations
-        [$code, $data] = $this->send($token, self::png(5000, 10), 'grande.png');
+        // Photo d'un téléphone récent (50 Mpx en 8160 × 6120 : trop de pixels), image trop large, photo de 12 Mpx acceptée
+        [$code, $data] = $this->send($token, self::png(8160, 6120), 'grande.png');
         self::assertSame(400, $code);
-        self::assertStringContainsString('4096', $data['message']);
+        self::assertStringContainsString('40 mégapixels', $data['message']);
+        [$code] = $this->send($token, self::png(9000, 10), 'large.png');
+        self::assertSame(400, $code);
+        [$code] = $this->send($token, self::png(4032, 3024), 'photo-12mpx.png');
+        self::assertSame(200, $code, 'Photo de 12 Mpx (4032 × 3024) acceptée');
         [$code, $data] = $this->send($token, self::gif(201), 'bombe.gif', 'image/gif');
         self::assertSame(400, $code, 'GIF « bombe » refusé');
         self::assertStringContainsString('200', $data['message']);

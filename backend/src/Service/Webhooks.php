@@ -45,6 +45,19 @@ final class Webhooks
         ]);
     }
 
+    /** Nouveau signalement (pour prévenir l'équipe par email ou message) : aucun nom ni email */
+    public function reportCreated(\App\Entity\Report $report, int $openReports): void
+    {
+        $this->queue('report.created', [
+            'reportId'    => $report->getId(),
+            'targetType'  => $report->getTargetType(),
+            'targetId'    => $report->getTargetId(),
+            'reason'      => $report->getReason(),
+            'openReports' => $openReports,
+            'createdAt'   => $report->getCreatedAt()->format(\DateTimeInterface::ATOM),
+        ]);
+    }
+
     private function queue(string $event, array $data): void
     {
         if ($this->url) $this->queue[] = ['event' => $event, 'data' => $data];

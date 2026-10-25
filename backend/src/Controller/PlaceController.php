@@ -7,6 +7,7 @@ use App\Entity\PlaceLike;
 use App\Entity\User;
 use App\Repository\PlaceRepository;
 use App\Service\ImageUploader;
+use App\Service\Moderation;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -72,6 +73,9 @@ class PlaceController extends AbstractController
     {
         /** @var User|null $me */
         $me       = $this->getUser();
+        if (!Moderation::visibleTo($me, $place->isHidden(), $place->getCreatedBy())) {
+            return $this->json(['message' => 'Lieu introuvable.'], 404);
+        }
         $likedIds = [];
         if ($me && $em->getRepository(PlaceLike::class)->findOneBy(['place' => $place, 'user' => $me])) {
             $likedIds[$place->getId()] = true;

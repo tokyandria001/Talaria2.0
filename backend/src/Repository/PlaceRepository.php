@@ -51,7 +51,8 @@ class PlaceRepository extends ServiceEntityRepository
     public function search(array $tags = [], string $search = '', array $bbox = [], ?User $recommendFor = null, int $limit = self::DEFAULT_LIMIT): array
     {
         $limit = max(1, min($limit, self::MAX_LIMIT));
-        $qb = $this->createQueryBuilder('p');
+        // Lieux masqués après signalements : absents de la carte
+        $qb = $this->createQueryBuilder('p')->andWhere('p.hiddenAt IS NULL');
 
         if ($search !== '') {
             $qb->andWhere('p.name LIKE :search OR p.description LIKE :search')
@@ -118,7 +119,7 @@ class PlaceRepository extends ServiceEntityRepository
         $cellLat = sprintf($floor, '(latitude + 90) / :cell');
         $cellLng = sprintf($floor, '(longitude + 180) / :cell');
 
-        $where  = ['latitude BETWEEN :latMin AND :latMax', 'longitude BETWEEN :lngMin AND :lngMax'];
+        $where  = ['latitude BETWEEN :latMin AND :latMax', 'longitude BETWEEN :lngMin AND :lngMax', 'hidden_at IS NULL'];
         $params = ['cell' => $cell, 'latMin' => $latMin, 'latMax' => $latMax, 'lngMin' => $lngMin, 'lngMax' => $lngMax];
         $types  = [];
 

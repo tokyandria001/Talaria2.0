@@ -35,6 +35,10 @@ class Article
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $coverImage = null;
 
+    /** Masqué automatiquement après plusieurs signalements, en attendant la décision d'un administrateur */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $hiddenAt = null;
+
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(nullable: false)]
     private User $author;
@@ -79,6 +83,10 @@ class Article
 
     public function getCoverImage(): ?string { return $this->coverImage; }
     public function setCoverImage(?string $i): static { $this->coverImage = $i; return $this; }
+
+    public function getHiddenAt(): ?\DateTimeImmutable { return $this->hiddenAt; }
+    public function isHidden(): bool { return $this->hiddenAt !== null; }
+    public function setHidden(bool $hidden): static { $this->hiddenAt = $hidden ? ($this->hiddenAt ?? new \DateTimeImmutable()) : null; return $this; }
 
     public function getAuthor(): User { return $this->author; }
     public function setAuthor(User $u): static { $this->author = $u; return $this; }

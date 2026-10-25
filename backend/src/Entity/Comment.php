@@ -28,6 +28,10 @@ class Comment
     #[Assert\Length(min: 1, max: 1000)]
     private string $content;
 
+    /** Masqué automatiquement après plusieurs signalements, en attendant la décision d'un administrateur */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $hiddenAt = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -47,6 +51,10 @@ class Comment
 
     public function getContent(): string { return $this->content; }
     public function setContent(string $c): static { $this->content = $c; return $this; }
+
+    public function getHiddenAt(): ?\DateTimeImmutable { return $this->hiddenAt; }
+    public function isHidden(): bool { return $this->hiddenAt !== null; }
+    public function setHidden(bool $hidden): static { $this->hiddenAt = $hidden ? ($this->hiddenAt ?? new \DateTimeImmutable()) : null; return $this; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }

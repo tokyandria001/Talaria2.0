@@ -136,6 +136,8 @@ class AuthController extends AbstractController
             $em->persist($user);
         } elseif ($user->getGoogleId() !== null && $user->getGoogleId() !== $claims['sub']) {
             return $this->json($this->error('Cet email est déjà lié à un autre compte Google.'), 409);
+        } elseif ($user->isSuspended()) {
+            return $this->json($this->error('Ce compte est suspendu. Contacte l\'équipe Talaria pour en savoir plus.'), 403);
         }
         // Email vérifié par Google : le compte existant est lié à ce compte Google
         $user->setGoogleId($claims['sub']);

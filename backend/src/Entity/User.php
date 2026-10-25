@@ -168,6 +168,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $passwordChangedAt = null;
 
+    /** Compte suspendu par un administrateur (connexion et API refusées) */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $suspendedAt = null;
+
     /** Suppression du compte demandée : effective 30 jours après (annulable d'ici là) */
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $deletionRequestedAt = null;
@@ -260,6 +264,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return array_unique($roles);
     }
     public function setRoles(array $roles): static { $this->roles = $roles; return $this; }
+
+    public function getSuspendedAt(): ?\DateTimeImmutable { return $this->suspendedAt; }
+    public function isSuspended(): bool { return $this->suspendedAt !== null; }
+    public function setSuspended(bool $suspended): static { $this->suspendedAt = $suspended ? ($this->suspendedAt ?? new \DateTimeImmutable()) : null; return $this; }
 
     /** Administrateur (rôle ROLE_ADMIN, attribué par la commande app:admin) : badge sur le site */
     public function isAdmin(): bool { return in_array('ROLE_ADMIN', $this->roles, true); }

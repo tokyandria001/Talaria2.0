@@ -76,6 +76,10 @@ class Place
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?User $createdBy = null;
 
+    /** Masqué automatiquement après plusieurs signalements, en attendant la décision d'un administrateur */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $hiddenAt = null;
+
     #[ORM\Column]
     private ?\DateTimeImmutable $createdAt = null;
 
@@ -132,6 +136,10 @@ class Place
 
     public function getCreatedBy(): ?User { return $this->createdBy; }
     public function setCreatedBy(?User $createdBy): static { $this->createdBy = $createdBy; return $this; }
+
+    public function getHiddenAt(): ?\DateTimeImmutable { return $this->hiddenAt; }
+    public function isHidden(): bool { return $this->hiddenAt !== null; }
+    public function setHidden(bool $hidden): static { $this->hiddenAt = $hidden ? ($this->hiddenAt ?? new \DateTimeImmutable()) : null; return $this; }
 
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
 }

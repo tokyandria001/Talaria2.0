@@ -16,6 +16,11 @@ framework:
             policy: sliding_window
             limit: 30
             interval: '1 hour'
+        # Signalements de contenus : 20 par heure et par utilisateur
+        report:
+            policy: sliding_window
+            limit: 20
+            interval: '1 hour'
         geo_search:
             policy: sliding_window
             limit: 60

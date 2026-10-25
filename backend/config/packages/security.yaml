@@ -16,6 +16,7 @@ security:
         login:
             pattern: ^/api/auth/login
             stateless: true
+            user_checker: App\Security\UserChecker
             json_login:
                 check_path: /api/auth/login
                 success_handler: lexik_jwt_authentication.handler.authentication_success
@@ -29,6 +30,7 @@ security:
         api:
             pattern: ^/api
             stateless: true
+            user_checker: App\Security\UserChecker
             entry_point: jwt
             jwt: ~
             # POST /api/token/refresh { refresh_token } → nouveau jeton d'accès + nouveau jeton de renouvellement
@@ -45,6 +47,7 @@ security:
         - { path: ^/api/auth/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/google, roles: PUBLIC_ACCESS }
         - { path: ^/api/token/(refresh|revoke), roles: PUBLIC_ACCESS }
+        - { path: ^/api/admin, roles: ROLE_ADMIN }
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
 
 when@test:

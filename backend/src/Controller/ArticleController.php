@@ -8,6 +8,7 @@ use App\Entity\Comment;
 use App\Entity\Notification;
 use App\Entity\User;
 use App\Service\ImageUploader;
+use App\Service\Moderation;
 use App\Service\UserPresenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -35,6 +36,10 @@ class ArticleController extends AbstractController
 
         if ($req->query->get('mine') === 'true' && $me) {
             $qb->andWhere('a.author = :me')->setParameter('me', $me);
+        } elseif (!$me?->isAdmin()) {
+            // Article masqué après signalements : visible seulement par son auteur
+            $qb->andWhere($me ? 'a.hiddenAt IS NULL OR a.author = :viewer' : 'a.hiddenAt IS NULL');
+            if ($me) $qb->setParameter('viewer', $me);
         }
         if ($category = $req->query->get('category')) {
             $qb->andWhere('a.category = :cat')->setParameter('cat', $category);
@@ -92,10 +97,11 @@ class ArticleController extends AbstractController
     public function show(int $id): JsonResponse
     {
         $article = $this->em->find(Article::class, $id);
-        if (!$article) return $this->json(['message' => 'Article introuvable.'], 404);
-
         /** @var User|null $me */
         $me = $this->getUser();
+        if (!$article || !Moderation::visibleTo($me, $article->isHidden(), $article->getAuthor())) {
+            return $this->json(['message' => 'Article introuvable.'], 404);
+        }
         $likedIds = [];
         if ($me) {
             $like = $this->em->getRepository(ArticleLike::class)
@@ -107,7 +113,8 @@ class ArticleController extends AbstractController
             ->findBy(['article' => $article], ['createdAt' => 'ASC']);
 
         $data = $this->serialize($article, true, $likedIds);
-        $data['comments'] = array_map(fn($c) => $this->serializeComment($c, $me), $comments);
+        $comments = array_filter($comments, fn (Comment $c) => Moderation::visibleTo($me, $c->isHidden(), $c->getAuthor()));
+        $data['comments'] = array_values(array_map(fn($c) => $this->serializeComment($c, $me), $comments));
 
         return $this->json($data);
     }

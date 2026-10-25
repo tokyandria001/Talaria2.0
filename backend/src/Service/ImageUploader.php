@@ -14,7 +14,8 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
  * Enregistre une image envoyée par un utilisateur dans public/uploads/<dossier>. Seul passage pour toutes
  * les images (profil, couverture, articles, groupes, lieux) :
  *  - type détecté d'après le contenu du fichier (jamais l'extension ni le type annoncé) : JPEG, PNG, WEBP, GIF ;
- *  - 5 Mo au plus (2 Mo pour un GIF), 4 096 px de côté au plus, 200 images au plus pour une animation ;
+ *  - 5 Mo au plus (2 Mo pour un GIF), 8 192 px de côté et 40 mégapixels au plus (photos des téléphones
+ *    récents acceptées, images démesurées refusées), 200 images au plus pour une animation ;
  *  - image relue et nettoyée bloc par bloc (métadonnées, blocs inconnus, données cachées retirés) ;
  *  - nom aléatoire et extension d'après le type détecté (le nom envoyé n'est jamais repris) ;
  *  - 30 envois par heure et par utilisateur.
@@ -25,7 +26,8 @@ final class ImageUploader
     private const TYPES = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
     private const MAX_BYTES = 5 * 1024 * 1024;
     private const MAX_GIF_BYTES = 2 * 1024 * 1024;
-    private const MAX_SIDE = 4096;
+    private const MAX_SIDE = 8192;
+    private const MAX_PIXELS = 40_000_000;
     private const MAX_FRAMES = 200;
 
     public function __construct(
@@ -61,8 +63,8 @@ final class ImageUploader
 
         $info = @getimagesize($file->getPathname());
         if (!$info || $info['mime'] !== $mime) throw new InvalidInputException('Image illisible ou endommagée.');
-        if ($info[0] < 1 || $info[1] < 1 || $info[0] > self::MAX_SIDE || $info[1] > self::MAX_SIDE) {
-            throw new InvalidInputException(sprintf('Image trop grande (%d × %d px maximum).', self::MAX_SIDE, self::MAX_SIDE));
+        if ($info[0] < 1 || $info[1] < 1 || $info[0] > self::MAX_SIDE || $info[1] > self::MAX_SIDE || $info[0] * $info[1] > self::MAX_PIXELS) {
+            throw new InvalidInputException(sprintf('Image trop grande (%d px de côté et %d mégapixels maximum).', self::MAX_SIDE, self::MAX_PIXELS / 1_000_000));
         }
 
         $clean = $this->stripper->sanitize((string) file_get_contents($file->getPathname()));
