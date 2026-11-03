@@ -48,7 +48,17 @@ final class PhotonMockResponseFactory
         }
         if (str_contains($url, 'router.project-osrm.org')) {
             $points = substr_count((string) parse_url($url, PHP_URL_PATH), ';') + 1;
-            $legs = array_fill(0, $points - 1, ['distance' => 465_800 / ($points - 1), 'duration' => 17_880 / ($points - 1)]);
+            $legs = array_fill(0, $points - 1, ['distance' => 465_800 / ($points - 1), 'duration' => 17_880 / ($points - 1),
+                'steps' => [['mode' => 'driving', 'name' => 'A7', 'distance' => 465_800 / ($points - 1), 'duration' => 17_880 / ($points - 1)]]]);
+            if (str_contains($url, '2.65000,39.57')) {
+                // Barcelone → Palma : route, deux portions de ferry consécutives, route
+                $legs[count($legs) - 1]['steps'] = [
+                    ['mode' => 'driving', 'name' => 'AP-7', 'distance' => 200_000, 'duration' => 7_200],
+                    ['mode' => 'ferry', 'name' => 'Barcelona - Palma', 'distance' => 120_000, 'duration' => 18_000],
+                    ['mode' => 'ferry', 'name' => '', 'distance' => 80_000, 'duration' => 9_000],
+                    ['mode' => 'driving', 'name' => 'Ma-13', 'distance' => 5_000, 'duration' => 600],
+                ];
+            }
             return new MockResponse(json_encode(['code' => 'Ok', 'routes' => [[
                 'distance' => 465_800, 'duration' => 17_880, 'legs' => $legs,
                 'geometry' => ['type' => 'LineString', 'coordinates' => [[2.352222, 48.856614], [3.5, 47.3], [4.835659, 45.764043]]],

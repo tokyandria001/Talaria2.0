@@ -52,6 +52,14 @@ final class GeoTest extends ApiTestCase
         self::assertSame('LineString', $route['geometry']['type']);
         self::assertSame([[2.35222, 48.85661], [3.5, 47.3], [4.83566, 45.76404]], $route['geometry']['coordinates']);
         self::assertSame([['distanceKm' => 466, 'durationMin' => 298]], $route['legs'], 'Sans étape : un seul tronçon');
+        self::assertFalse($route['hasFerry']);
+        self::assertSame([], $route['ferries']);
+
+        // Nantes → Palma : voiture + ferry (Barcelone → Palma), portions consécutives réunies
+        [$code, $island] = $this->json('GET', '/api/geo/route?from=47.2184,-1.5536&to=39.5700,2.6500', null, $token);
+        self::assertSame(200, $code);
+        self::assertTrue($island['hasFerry']);
+        self::assertSame([['name' => 'Barcelona - Palma', 'distanceKm' => 200, 'durationMin' => 450]], $island['ferries']);
 
         // Étapes intermédiaires : un tronçon par étape
         [$code, $withStops] = $this->json('GET', '/api/geo/route?from=48.8566,2.3522&to=45.7640,4.8357&via=' . urlencode('47.3220,5.0415|46.7800,4.8530'), null, $token);

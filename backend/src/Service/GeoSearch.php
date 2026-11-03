@@ -12,7 +12,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 /**
  * Recherche de villes et de pays (destination d'un voyage), d'adresses (logement) et itinéraires routiers.
  *
- * Fournisseurs basés sur OpenStreetMap, à utiliser avec modération (cache + limite par utilisateur) :
+ * Fournisseurs basés sur OpenStreetMap, à utilis er avec modération (cache + limite par utilisateur) :
  * - Geoapify (clé GEOAPIFY_API_KEY, offre gratuite 3 000 requêtes/jour) pour les lieux, les adresses,
  *   les gares, aéroports et logements ; ses réponses sont converties au format de Photon ;
  * - Photon (photon.komoot.io) en secours : sans clé, ou si Geoapify ne répond pas / quota atteint ;
@@ -82,23 +82,27 @@ final class GeoSearch
     /**
      * Itinéraire en voiture, avec des étapes intermédiaires facultatives ($via : liste de [lat, lon]) :
      * distance (km), durée (min), tracé de la route (GeoJSON LineString, coordonnées [lon, lat] qui suivent
-     * la route à 3 m près) et un tronçon par étape (legs). Gardé en cache 30 jours.
+     * la route à 3 m près), un tronçon par étape (legs) et les traversées en ferry (ferries), pour signaler
+     * « voiture + ferry » (billet non compris dans le coût). Gardé en cache 30 jours.
      *
      * @param list<array{0: float, 1: float}> $via
-     * @return array{distanceKm: int, durationMin: int, legs: list<array{distanceKm: int, durationMin: int}>, geometry: array{type: string, coordinates: list<array{0: float, 1: float}>}|null}
+     * @return array{distanceKm: int, durationMin: int, legs: list<array{distanceKm: int, durationMin: int}>,
+     *                hasFerry: bool, ferries: list<array{name: ?string, distanceKm: int, durationMin: int}>,
+     *                geometry: array{type: string, coordinates: list<array{0: float, 1: float}>}|null}
      */
     public function route(float $fromLat, float $fromLon, float $toLat, float $toLon, array $via = []): array
     {
         $points = [[$fromLat, $fromLon], ...array_slice($via, 0, self::MAX_VIA), [$toLat, $toLon]];
         $path = implode(';', array_map(fn (array $p) => sprintf('%.5f,%.5f', $p[1], $p[0]), $points));
 
-        // v4 : tracé précis (les entrées en cache plus anciennes, moins précises, sont ignorées)
-        return $this->cache->get('geo_route_v4_' . md5($path), function (ItemInterface $item) use ($path) {
+        // v5 : avec les traversées en ferry (les entrées en cache plus anciennes sont ignorées)
+        return $this->cache->get('geo_route_v5_' . md5($path), function (ItemInterface $item) use ($path) {
             $item->expiresAfter(30 * 86400);
             try {
                 // overview=full : le tracé suit la route (simplified coupe en ligne droite entre de rares points) ;
                 // il est ensuite allégé par traceRoute() sans perdre la forme des virages
-                $data = $this->httpClient->request('GET', self::ROUTE_URL . $path . '?overview=full&geometries=geojson', [
+                // steps=true : le détail des étapes indique les portions en ferry (mode « ferry »)
+                $data = $this->httpClient->request('GET', self::ROUTE_URL . $path . '?overview=full&geometries=geojson&steps=true', [
                     'headers' => ['User-Agent' => self::USER_AGENT],
                     'timeout' => 8,
                 ])->toArray();
@@ -117,9 +121,43 @@ final class GeoSearch
                     'distanceKm'  => (int) round(($leg['distance'] ?? 0) / 1000),
                     'durationMin' => (int) round(($leg['duration'] ?? 0) / 60),
                 ], array_values(array_filter($route['legs'] ?? [], 'is_array'))),
+                'hasFerry'    => ($ferries = $this->ferries($route)) !== [],
+                'ferries'     => $ferries,
                 'geometry'    => $this->traceRoute($route['geometry'] ?? null),
             ];
         });
+    }
+
+    /**
+     * Traversées en ferry de l'itinéraire : étapes OSRM en mode « ferry », les étapes consécutives
+     * réunies en une seule traversée (nom de la ligne quand OpenStreetMap le connaît).
+     *
+     * @return list<array{name: ?string, distanceKm: int, durationMin: int}>
+     */
+    private function ferries(array $route): array
+    {
+        $ferries = [];
+        $current = null;
+        foreach ($route['legs'] ?? [] as $leg) {
+            foreach (is_array($leg) ? ($leg['steps'] ?? []) : [] as $step) {
+                if (!is_array($step)) continue;
+                if (($step['mode'] ?? '') !== 'ferry') {
+                    if ($current) { $ferries[] = $current; $current = null; }
+                    continue;
+                }
+                $current ??= ['name' => null, 'distance' => 0.0, 'duration' => 0.0];
+                $current['name'] ??= trim((string) ($step['name'] ?? '')) ?: null;
+                $current['distance'] += (float) ($step['distance'] ?? 0);
+                $current['duration'] += (float) ($step['duration'] ?? 0);
+            }
+        }
+        if ($current) $ferries[] = $current;
+
+        return array_map(fn (array $f) => [
+            'name'        => $f['name'],
+            'distanceKm'  => (int) round($f['distance'] / 1000),
+            'durationMin' => (int) round($f['duration'] / 60),
+        ], $ferries);
     }
 
     /** Tracé : écart toléré par rapport à la route (m), et nombre de points au plus */
